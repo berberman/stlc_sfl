@@ -1,0 +1,6 @@
+name = "stlc_sfl"
+version = "0.1.0"
+defaultTargets = ["StlcSfl"]
+
+[[lean_lib]]
+name = "StlcSfl"

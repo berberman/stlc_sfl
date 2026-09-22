@@ -50,7 +50,7 @@ scoped syntax:50 stlcTy:51 " + " stlcTy:50 : stlcTy
 scoped syntax:51 " [ " stlcTy:50  " ] " : stlcTy
 
 scoped syntax:max num : stlcTm
-scoped syntax:60 stlcTm:61 " * " stlcTm:60 : stlcTm
+scoped syntax:60 stlcTm:60 " * " stlcTm:61 : stlcTm
 scoped syntax:50 "if0 " stlcTm:51 " then " stlcTm:50 " else " stlcTm:50 : stlcTm
 
 scoped syntax:60 " inr " stlcTy:60 ppSpace stlcTm:60 : stlcTm
@@ -107,7 +107,7 @@ def tyHandlers : TyElabHandler :=
   extendedTyHandler.orElse (commonTyHandler language)
 
 partial def elabTy : TyElab :=
-  tyHandlers elabTy unsupportedTy
+  tyHandlers elabTy <| unsupportedTy language
 
 def extendedTmHandler : TmElabHandler :=
   fun recur k Γ free t => do
@@ -513,37 +513,37 @@ end Delab
 
 example (x : Tm) : (<{ x }> : Tm) = x := rfl
 
-/-- info: <{ λ x : Nat . x }> : Tm -/
+/-- info: <{ λ X : Nat . X }> : Tm -/
 #guard_msgs in
-#check <{ λx : Nat. x }>
+#check <{ λ X : Nat. X }>
 
-/-- info: <{ if0 x then x else x }> : Tm -/
+/-- info: <{ if0 X then X else X }> : Tm -/
 #guard_msgs in
-#check <{ if0 x then x else x }>
+#check <{ if0 X then X else X }>
 
-/-- info: <{ if0 y x then x else x }> : Tm -/
+/-- info: <{ if0 Y X then X else X }> : Tm -/
 #guard_msgs in
-#check <{ if0 y x then x else x }>
+#check <{ if0 Y X then X else X }>
 
-/-- info: <{ if0 y x then x else x }> : Tm -/
+/-- info: <{ if0 Y X then X else X }> : Tm -/
 #guard_msgs in
-#check <{ if0 (y x) then x else x }>
+#check <{ if0 (Y X) then X else X }>
 
-/-- info: <{ x * y * z }> : Tm -/
+/-- info: <{ X * Y * Z }> : Tm -/
 #guard_msgs in
-#check <{ x * y * z }>
+#check <{ X * Y * Z }>
 
-/-- info: <{ succ (pred x) }> : Tm -/
+/-- info: <{ succ (pred X) }> : Tm -/
 #guard_msgs in
-#check <{ succ (pred x) }>
+#check <{ succ (pred X) }>
 
-/-- info: <{ succ x y }> : Tm -/
+/-- info: <{ succ X Y }> : Tm -/
 #guard_msgs in
-#check <{ succ x y }>
+#check <{ succ X Y }>
 
-/-- info: <{ inr Nat (λ x : Unit . x) }> : Tm -/
+/-- info: <{ inr Nat (λ X : Unit . X) }> : Tm -/
 #guard_msgs in
-#check <{ inr Nat (λx : Unit . x) }>
+#check <{ inr Nat (λ X : Unit . X) }>
 
 /-- info: <{ nil Nat }> : Tm -/
 #guard_msgs in
@@ -553,53 +553,53 @@ example (x : Tm) : (<{ x }> : Tm) = x := rfl
 #guard_msgs in
 #check <{ 3 :: nil Nat }>
 
-/-- info: <{ ( x , y ) }> : Tm -/
+/-- info: <{ ( X , Y ) }> : Tm -/
 #guard_msgs in
-#check <{ (x , y) }>
+#check <{ (X , Y) }>
 
-/-- info: <{ fst x }> : Tm -/
+/-- info: <{ fst X }> : Tm -/
 #guard_msgs in
-#check <{ fst x }>
+#check <{ fst X }>
 
-/-- info: <{ fst  ( x , y ) }> : Tm -/
+/-- info: <{ fst  ( X , Y ) }> : Tm -/
 #guard_msgs in
-#check <{ fst (x , y) }>
+#check <{ fst (X , Y) }>
 
 /-- info: <{ inl Nat 3 }> : Tm -/
 #guard_msgs in
 #check <{ inl Nat 3 }>
 
-/-- info: <{ x (succ y) }> : Tm -/
+/-- info: <{ X (succ Y) }> : Tm -/
 #guard_msgs in
-#check <{ x (succ y) }>
+#check <{ X (succ Y) }>
 
-/-- info: <{ x * y z }> : Tm -/
+/-- info: <{ X * Y Z }> : Tm -/
 #guard_msgs in
-#check <{ x * y z }>
+#check <{ X * Y Z }>
 
-/-- info: <{ x * y (succ z) }> : Tm -/
+/-- info: <{ X * Y (succ Z) }> : Tm -/
 #guard_msgs in
-#check <{ x * y (succ z) }>
+#check <{ X * Y (succ Z) }>
 
-/-- info: <{ z x y }> : Tm -/
+/-- info: <{ Z X Y }> : Tm -/
 #guard_msgs in
-#check <{ z x y }>
+#check <{ Z X Y }>
 
-/-- info: <{ z x * y }> : Tm -/
+/-- info: <{ Z X * Y }> : Tm -/
 #guard_msgs in
-#check <{ z x * y }>
+#check <{ Z X * Y }>
 
-/-- info: <{ λ x : Nat . λ y : Nat . if0 x then 0 else pred (x * y) }> : Tm -/
+/-- info: <{ λ X : Nat . λ Y : Nat . if0 X then 0 else pred (X * Y) }> : Tm -/
 #guard_msgs in
-#check <{ λ x : Nat . λ y : Nat . if0 x then 0 else pred (x * y) }>
+#check <{ λ X : Nat . λ Y : Nat . if0 X then 0 else pred (X * Y) }>
 
 /-- info: <{ ( [ Nat ] → Nat × Unit) → Nat + Unit }> : Ty -/
 #guard_msgs in
 #check <{ ([Nat] -> Nat × Unit) -> Nat + Unit }>
 
-/-- info: <{ let x = 1 in ( x , unit ) }> : Tm -/
+/-- info: <{ let X = 1 in ( X , unit ) }> : Tm -/
 #guard_msgs in
-#check <{ let x = 1 in (x, unit) }>
+#check <{ let X = 1 in (X, unit) }>
 
 /-- info: (Ty.nat.list.arrow (Ty.nat.prod Ty.unit)).arrow (Ty.nat.sum Ty.unit) : Ty -/
 #guard_msgs in
@@ -607,31 +607,40 @@ set_option pp.notation false in
 #check <{ ([Nat] -> Nat × Unit) -> Nat + Unit }>
 
 example :
-    (<{ case s of inl x => x | inr y => y }> : Tm) =
+    (<{ case S of inl X => X | inr Y => Y }> : Tm) =
       Tm.sumCase
-        (Tm.var "s")
-        "x" (Tm.var "x")
-        "y" (Tm.var "y") := rfl
+        (Tm.var "S")
+        "X" (Tm.var "X")
+        "Y" (Tm.var "Y") := rfl
 
+/--
+warning: Variable name `XS` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _XS
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+-/
+#guard_msgs in
 example :
     (<{
-      case xs of
-        nil => z |
-        x :: xs => x
+      case XS of
+        nil => Z |
+        X :: XS => X
     }> : Tm) =
       Tm.listCase
-        (Tm.var "xs")
-        (Tm.var "z")
-        "x"
-        "xs"
-        (Tm.var "x") := rfl
+        (Tm.var "XS")
+        (Tm.var "Z")
+        "X"
+        "XS"
+        (Tm.var "X") := rfl
 
 example :
-    (<{ let x = y in x }> : Tm) =
+    (<{ let X = Y in X }> : Tm) =
       Tm.letIn
-        "x"
-        (Tm.var "y")
-        (Tm.var "x") := rfl
+        "X"
+        (Tm.var "Y")
+        (Tm.var "X") := rfl
 
 def subst (x : String) (s : Tm) (t : Tm) : Tm :=
   match t with
@@ -639,64 +648,64 @@ def subst (x : String) (s : Tm) (t : Tm) : Tm :=
   | .var y =>
       if x = y then s else t
   | .abs y τ t₁ =>
-      if x = y then t else <{ λ ~y : τ . [~x := s] t₁ }>
+      if x = y then t else <{ λ y : τ . [x := s] t₁ }>
   | .app t₁ t₂ =>
-      <{ ([~x := s] t₁) ([~x := s] t₂) }>
+      <{ ([x := s] t₁) ([x := s] t₂) }>
   -- numbers
   | .const _ =>
       t
   | .succ t₁ =>
-      <{ succ ([~x := s] t₁) }>
+      <{ succ ([x := s] t₁) }>
   | .pred t₁ =>
-      <{ pred ([~x := s] t₁) }>
+      <{ pred ([x := s] t₁) }>
   | .mult t₁ t₂ =>
-      <{ ([~x := s] t₁) * ([~x := s] t₂) }>
+      <{ ([x := s] t₁) * ([x := s] t₂) }>
   | .ite0 t₁ t₂ t₃ =>
       <{
-        if0 [~x := s] t₁
-        then [~x := s] t₂
-        else [~x := s] t₃
+        if0 [x := s] t₁
+        then [x := s] t₂
+        else [x := s] t₃
       }>
   -- sums
   | .sumInl τ₂ t₁ =>
-      <{ inl τ₂ ([~x := s] t₁) }>
+      <{ inl τ₂ ([x := s] t₁) }>
   | .sumInr τ₂ t₁ =>
-      <{ inr τ₂ ([~x := s] t₁) }>
+      <{ inr τ₂ ([x := s] t₁) }>
   | .sumCase t x₁ t₁ x₂ t₂ =>
-      let t₁ := if x = x₁ then t₁ else <{ [~x := s] t₁ }>
-      let t₂ := if x = x₂ then t₂ else <{ [~x := s] t₂ }>
+      let t₁ := if x = x₁ then t₁ else <{ [x := s] t₁ }>
+      let t₂ := if x = x₂ then t₂ else <{ [x := s] t₂ }>
       <{
-        case ([~x := s] t) of
-          inl ~x₁ => t₁ |
-          inr ~x₂ => t₂
+        case ([x := s] t) of
+          inl x₁ => t₁ |
+          inr x₂ => t₂
       }>
   -- lists
   | .listNil _ => t
-  | .listCons t₁ t₂ => <{ ([~x := s] t₁) :: ([~x := s] t₂) }>
+  | .listCons t₁ t₂ => <{ ([x := s] t₁) :: ([x := s] t₂) }>
   | .listCase t₁ t₂ x₁ x₂ t₃ =>
-      let t₃ := if x = x₁ || x = x₂ then t₃ else <{ [~x := s] t₃ }>
+      let t₃ := if x = x₁ || x = x₂ then t₃ else <{ [x := s] t₃ }>
       <{
-        case ([~x := s] t₁) of
-          nil => [~x := s] t₂ |
-          ~x₁ :: ~x₂ => t₃
+        case ([x := s] t₁) of
+          nil => [x := s] t₂ |
+          x₁ :: x₂ => t₃
       }>
   -- unit
   | .unit => <{ unit }>
   -- pairs
   | .pair t₁ t₂ =>
-      <{ (([~x := s] t₁), ([~x := s] t₂)) }>
+      <{ (([x := s] t₁), ([x := s] t₂)) }>
   | .fst t₁ =>
-      <{ fst ([~x := s] t₁) }>
+      <{ fst ([x := s] t₁) }>
   | .snd t₁ =>
-      <{ snd ([~x := s] t₁) }>
+      <{ snd ([x := s] t₁) }>
   -- let
   | .letIn y t₁ t₂ =>
-      let t₂ := if x = y then t₂ else <{ [~x := s] t₂ }>
+      let t₂ := if x = y then t₂ else <{ [x := s] t₂ }>
       <{
-        let ~y = [~x := s] t₁ in t₂
+        let y = [x := s] t₁ in t₂
       }>
   -- fix
-  | .fix t₁ => <{ fix ([~x := s] t₁) }>
+  | .fix t₁ => <{ fix ([x := s] t₁) }>
 
 open Lean PrettyPrinter in
 @[app_unexpander subst]
@@ -704,7 +713,7 @@ def unexpandSubst : Unexpander := StlcCommon.Delab.unexpandSubst
 
 inductive Tm.IsValue : Tm → Prop where
   -- In pure STLC, function abstractions are values:
-  | abs (x : String) (τ₂ : Ty) (t₁ : Tm) : IsValue <{λ ~x : τ₂ . t₁}>
+  | abs (x : String) (τ₂ : Ty) (t₁ : Tm) : IsValue <{λ x : τ₂ . t₁}>
   -- Numbers are values:
   | nat (n : Nat) : IsValue (.const n)
   -- A tagged value is a value:
@@ -736,7 +745,7 @@ inductive Step : Tm → Tm → Prop where
   -- pure STLC
   | appAbs (x : String) (τ₂ : Ty) (t₁ v₂ : Tm) :
       v₂.IsValue →
-      <{(λ ~x: τ₂ . t₁) v₂}> ⟶ <{ [~x := v₂] t₁ }>
+      <{(λ x: τ₂ . t₁) v₂}> ⟶ <{ [x := v₂] t₁ }>
   | app₁ (t₁ t₁' t₂ : Tm) :
       t₁ ⟶ t₁' →
       <{t₁ t₂}> ⟶ <{t₁' t₂}>
@@ -775,14 +784,14 @@ inductive Step : Tm → Tm → Prop where
       <{inr τ₁ t₂}> ⟶ <{inr τ₁ t₂'}>
   | sumCase (t t' : Tm) (x₁ : String) (t₁ : Tm) (x₂ : String) (t₂ : Tm) :
       t ⟶ t' →
-      <{case t of inl ~x₁ => t₁ | inr ~x₂ => t₂}> ⟶
-      <{case t' of inl ~x₁ => t₁ | inr ~x₂ => t₂}>
+      <{case t of inl x₁ => t₁ | inr x₂ => t₂}> ⟶
+      <{case t' of inl x₁ => t₁ | inr x₂ => t₂}>
   | sumCaseInl (v : Tm) (x₁:String) (t₁ : Tm) (x₂ : String) (t₂ : Tm) (τ₂ : Ty) :
       v.IsValue →
-      <{case inl τ₂ v of inl ~x₁ => t₁ | inr ~x₂ => t₂}> ⟶ <{ [~x₁ := v] t₁ }>
+      <{case inl τ₂ v of inl x₁ => t₁ | inr x₂ => t₂}> ⟶ <{ [x₁ := v] t₁ }>
   | sumCaseInr (v : Tm) (x₁:String) (t₁ : Tm) (x₂ : String) (t₂ : Tm) (τ₁ : Ty) :
       v.IsValue →
-      <{case inr τ₁ v of inl ~x₁ => t₁ | inr ~x₂ => t₂}> ⟶ <{ [~x₂ := v] t₂ }>
+      <{case inr τ₁ v of inl x₁ => t₁ | inr x₂ => t₂}> ⟶ <{ [x₂ := v] t₂ }>
   -- lists
   | cons₁ (t₁ t₁' t₂ : Tm) :
       t₁ ⟶ t₁' →
@@ -793,15 +802,15 @@ inductive Step : Tm → Tm → Prop where
       <{v₁ :: t₂}> ⟶ <{v₁ :: t₂'}>
   | listCase₁ (t₁ t₁' t₂ : Tm) (x₁ x₂ : String) (t₃ : Tm) :
       t₁ ⟶ t₁' →
-      <{case t₁ of nil => t₂ | ~x₁ :: ~x₂ => t₃}> ⟶
-      <{case t₁' of nil => t₂ | ~x₁ :: ~x₂ => t₃}>
+      <{case t₁ of nil => t₂ | x₁ :: x₂ => t₃}> ⟶
+      <{case t₁' of nil => t₂ | x₁ :: x₂ => t₃}>
   | listCaseNil (τ₁ : Ty) (t₂ : Tm) (x₁ x₂ : String) (t₃ : Tm) :
-      <{case nil τ₁ of nil => t₂ | ~x₁ :: ~x₂ => t₃}> ⟶ t₂
+      <{case nil τ₁ of nil => t₂ | x₁ :: x₂ => t₃}> ⟶ t₂
   | listCaseCons (v₁ vl t₂ : Tm) (x₁ x₂ : String) (t₃ : Tm) :
       v₁.IsValue →
       vl.IsValue →
-      <{case v₁ :: vl of nil => t₂ | ~x₁ :: ~x₂ => t₃}>
-         ⟶  <{ [~x₂ := vl] ([~x₁ := v₁] t₃) }>
+      <{case v₁ :: vl of nil => t₂ | x₁ :: x₂ => t₃}>
+         ⟶  <{ [x₂ := vl] ([x₁ := v₁] t₃) }>
 
   -- Add rules for the following extensions.
 
@@ -833,10 +842,10 @@ inductive Step : Tm → Tm → Prop where
   -- SOLUTION
   | let₁ (x : String) (t₁ t₁' t₂ : Tm) :
       t₁ ⟶ t₁' →
-      <{ let ~x = t₁ in t₂}> ⟶ <{ let ~x = t₁' in t₂ }>
+      <{ let x = t₁ in t₂}> ⟶ <{ let x = t₁' in t₂ }>
   | letValue (x : String) (v₁ t₂ : Tm) :
       v₁.IsValue →
-      <{ let ~x = v₁ in t₂ }> ⟶ <{ [~x := v₁] t₂ }>
+      <{ let x = v₁ in t₂ }> ⟶ <{ [x := v₁] t₂ }>
   -- END SOLUTION
   -- fix
   -- SOLUTION
@@ -844,8 +853,8 @@ inductive Step : Tm → Tm → Prop where
       t₁ ⟶ t₁' →
       <{ fix t₁ }> ⟶ <{ fix t₁' }>
    | fixAbs (x : String) (τ₁ : Ty) (t₁ : Tm) :
-      <{ fix (λ ~x : τ₁ . t₁) }> ⟶
-      <{ [~x := fix (λ ~x : τ₁ . t₁) ] t₁ }>
+      <{ fix (λ x : τ₁ . t₁) }> ⟶
+      <{ [x := fix (λ x : τ₁ . t₁) ] t₁ }>
   -- END SOLUTION
 end
 
@@ -859,8 +868,8 @@ inductive HasType : Context → Tm → Ty → Prop where
   | var (Γ : Context) (x : String) (τ₁ : Ty) (h : Γ[x] = some τ₁) :
       <{ Γ ⊢ ~(Tm.var x) ⦂ τ₁ }>
   | abs (Γ : Context) (x : String) (τ₁ τ₂ : Ty) (t₁ : Tm)
-      (h : <{ ~x ↦ τ₂ ; Γ ⊢ t₁ ⦂ τ₁ }>) :
-      <{ Γ ⊢ λ ~x : τ₂ . t₁ ⦂ τ₂ → τ₁ }>
+      (h : <{ x ↦ τ₂ ; Γ ⊢ t₁ ⦂ τ₁ }>) :
+      <{ Γ ⊢ λ x : τ₂ . t₁ ⦂ τ₂ → τ₁ }>
   | app (Γ : Context) (τ₁ τ₂ : Ty) (t₁ t₂ : Tm)
       (h₁ : <{ Γ ⊢ t₁ ⦂ τ₂ → τ₁ }>) (h₂ : <{ Γ ⊢ t₂ ⦂ τ₂ }>) :
       <{ Γ ⊢ t₁ t₂ ⦂ τ₁ }>
@@ -880,16 +889,16 @@ inductive HasType : Context → Tm → Ty → Prop where
       <{ Γ ⊢ if0 t₁ then t₂ else t₃ ⦂ τ }>
   -- sums
   | sumInl (Γ : Context) (t₁ : Tm) (τ₁ τ₂ : Ty) :
-      <{ ~Γ ⊢ t₁ ⦂ τ₁ }> →
-      <{ ~Γ ⊢ (inl τ₂ t₁) ⦂ τ₁ + τ₂ }>
+      <{ Γ ⊢ t₁ ⦂ τ₁ }> →
+      <{ Γ ⊢ (inl τ₂ t₁) ⦂ τ₁ + τ₂ }>
   | sumInr (Γ : Context) (t₂ : Tm) (τ₁ τ₂ : Ty) :
-      <{ ~Γ ⊢ t₂ ⦂ τ₂ }> →
-      <{ ~Γ ⊢ (inr τ₁ t₂) ⦂ τ₁ + τ₂ }>
+      <{ Γ ⊢ t₂ ⦂ τ₂ }> →
+      <{ Γ ⊢ (inr τ₁ t₂) ⦂ τ₁ + τ₂ }>
   | sumCase (Γ : Context) (x₁ x₂ : String) (τ₁ τ₂ τ₃: Ty) (t t₁ t₂ : Tm) :
       <{ Γ ⊢ t ⦂ τ₁ + τ₂ }> →
-      <{ ~x₁ ↦ τ₁ ; Γ ⊢ t₁ ⦂ τ₃ }> →
-      <{ ~x₂ ↦ τ₂ ; Γ ⊢ t₂ ⦂ τ₃ }> →
-      <{ ~Γ ⊢ case t of inl ~x₁ => t₁ | inr ~x₂ => t₂ ⦂ τ₃ }>
+      <{ x₁ ↦ τ₁ ; Γ ⊢ t₁ ⦂ τ₃ }> →
+      <{ x₂ ↦ τ₂ ; Γ ⊢ t₂ ⦂ τ₃ }> →
+      <{ Γ ⊢ case t of inl x₁ => t₁ | inr x₂ => t₂ ⦂ τ₃ }>
   -- lists
   | listNil (Γ : Context) (τ₁ : Ty) :
       <{ Γ ⊢ nil τ₁ ⦂ [τ₁] }>
@@ -900,8 +909,8 @@ inductive HasType : Context → Tm → Ty → Prop where
   | listCase (Γ : Context) (t₁ t₂ t₃ : Tm) (x₁ x₂ : String) (τ₁ τ₂ : Ty) :
       <{ Γ ⊢ t₁ ⦂ [τ₁] }> →
       <{ Γ ⊢ t₂ ⦂ ~τ₂ }> →
-      <{ ~x₁ ↦ τ₁ ; ~x₂ ↦ [τ₁] ; Γ ⊢ t₃ ⦂ τ₂ }> →
-      <{ Γ ⊢ case t₁ of nil => t₂ | ~x₁ :: ~x₂ => t₃ ⦂ τ₂ }>
+      <{ x₁ ↦ τ₁ ; x₂ ↦ [τ₁] ; Γ ⊢ t₃ ⦂ τ₂ }> →
+      <{ Γ ⊢ case t₁ of nil => t₂ | x₁ :: x₂ => t₃ ⦂ τ₂ }>
   -- unit
   | unit (Γ : Context) : <{ Γ ⊢ unit ⦂ Unit }>
 
@@ -924,8 +933,8 @@ inductive HasType : Context → Tm → Ty → Prop where
   -- SOLUTION
   | letIn (Γ : Context) (x : String) (t₁ t₂ : Tm) (τ₁ τ₂ : Ty) :
       <{ Γ ⊢ t₁ ⦂ τ₁ }> →
-      <{ ~x ↦ ~τ₁ ; Γ ⊢ t₂ ⦂ τ₂ }> →
-      <{ Γ ⊢ let ~x = t₁ in t₂ ⦂ τ₂ }>
+      <{ x ↦ τ₁ ; Γ ⊢ t₂ ⦂ τ₂ }> →
+      <{ Γ ⊢ let x = t₁ in t₂ ⦂ τ₂ }>
   -- END SOLUTION
   -- fix
   -- SOLUTION
@@ -942,8 +951,8 @@ namespace Sums1
 
 def tm_test :=
   <{ case (inl Nat 5) of
-       inl x => x
-     | inr y => y }>
+       inl X => X
+     | inr Y => Y }>
 
 theorem typechecks :
     <{ ∅ ⊢ tm_test ⦂ Nat }> := by

@@ -18,9 +18,8 @@ inductive Tm where
   | ite0 (c t e : Tm)
 
 scoped syntax:max num : stlcTm
-scoped syntax:60 stlcTm:61 " * " stlcTm:60 : stlcTm
+scoped syntax:60 stlcTm:60 " * " stlcTm:61 : stlcTm
 scoped syntax:50 "if0 " stlcTm:51 " then " stlcTm:50 " else " stlcTm:50 : stlcTm
-
 
 namespace Elab
 
@@ -50,7 +49,7 @@ def tyHandlers : TyElabHandler :=
   natTyHandler.orElse (commonTyHandler language)
 
 partial def elabTy : TyElab :=
-  tyHandlers elabTy unsupportedTy
+  tyHandlers elabTy <| unsupportedTy language
 
 def arithTmHandler : TmElabHandler :=
   fun recur k Γ free t => do
@@ -176,59 +175,59 @@ end Delab
 #guard_msgs in
 #check <{ Nat }>
 
-/-- info: <{ λ x : Nat . x }> : Tm -/
+/-- info: <{ λ X : Nat . X }> : Tm -/
 #guard_msgs in
-#check <{ λ x : Nat . x }>
+#check <{ λ X : Nat . X }>
 
-/-- info: <{ if0 x then x else x }> : Tm -/
+/-- info: <{ if0 X then X else X }> : Tm -/
 #guard_msgs in
-#check <{ if0 x then x else x }>
+#check <{ if0 X then X else X }>
 
-/-- info: <{ if0 y x then x else x }> : Tm -/
+/-- info: <{ if0 Y X then X else X }> : Tm -/
 #guard_msgs in
-#check <{ if0 y x then x else x }>
+#check <{ if0 Y X then X else X }>
 
-/-- info: <{ if0 y x then x else x }> : Tm -/
+/-- info: <{ if0 Y X then X else X }> : Tm -/
 #guard_msgs in
-#check <{ if0 (y x) then x else x }>
+#check <{ if0 (Y X) then X else X }>
 
-/-- info: <{ x * y * z }> : Tm -/
+/-- info: <{ X * Y * Z }> : Tm -/
 #guard_msgs in
-#check <{ x * y * z }>
+#check <{ X * Y * Z }>
 
-/-- info: <{ succ (pred x) }> : Tm -/
+/-- info: <{ succ (pred X) }> : Tm -/
 #guard_msgs in
-#check <{ succ (pred x) }>
+#check <{ succ (pred X) }>
 
-/-- info: <{ succ x y }> : Tm -/
+/-- info: <{ succ X Y }> : Tm -/
 #guard_msgs in
-#check <{ succ x y }>
+#check <{ succ X Y }>
 
-/-- info: <{ x (succ y) }> : Tm -/
+/-- info: <{ X (succ Y) }> : Tm -/
 #guard_msgs in
-#check <{ x (succ y) }>
+#check <{ X (succ Y) }>
 
-/-- info: <{ x * y z }> : Tm -/
+/-- info: <{ X * Y Z }> : Tm -/
 #guard_msgs in
-#check <{ x * y z }>
+#check <{ X * Y Z }>
 
-/-- info: <{ x * y (succ z) }> : Tm -/
+/-- info: <{ X * Y (succ Z) }> : Tm -/
 #guard_msgs in
-#check <{ x * y (succ z) }>
+#check <{ X * Y (succ Z) }>
 
-/-- info: <{ z x y }> : Tm -/
+/-- info: <{ Z X Y }> : Tm -/
 #guard_msgs in
-#check <{ z x y }>
+#check <{ Z X Y }>
 
-/-- info: <{ z x * y }> : Tm -/
+/-- info: <{ Z X * Y }> : Tm -/
 #guard_msgs in
-#check <{ z x * y }>
+#check <{ Z X * Y }>
 
-/-- info: <{ λ x : Nat . λ y : Nat . if0 x then 0 else pred (x * y) }> : Tm -/
+/-- info: <{ λ X : Nat . λ Y : Nat . if0 X then 0 else pred (X * Y) }> : Tm -/
 #guard_msgs in
-#check <{ λ x : Nat . λ y : Nat . if0 x then 0 else pred (x * y) }>
+#check <{ λ X : Nat . λ Y : Nat . if0 X then 0 else pred (X * Y) }>
 
-/-- info: <{ «if» }> : Tm -/
+/-- info: StlcArith.Tm.var "if" : Tm -/
 #guard_msgs in
 #check Tm.var "if"
 
@@ -253,20 +252,20 @@ def subst (x : String) (s : Tm) (t : Tm) : Tm :=
   match t with
   | .var y =>
       if x = y then s else t
-  | .abs y T t₁ =>
-      if x = y then t else <{ λ ~y : T . [~x := s] t₁ }>
+  | .abs y τ t₁ =>
+      if x = y then t else <{ λ y : τ . [x := s] t₁ }>
   | .app t₁ t₂ =>
-      <{ ([~x := s] t₁) ([~x := s] t₂) }>
+      <{ ([x := s] t₁) ([x := s] t₂) }>
   | .const _ =>
       t
   | .succ t₁ =>
-      <{ succ ([~x := s] t₁) }>
+      <{ succ ([x := s] t₁) }>
   | .pred t₁ =>
-      <{ pred ([~x := s] t₁) }>
+      <{ pred ([x := s] t₁) }>
   | .mult t₁ t₂ =>
-      <{ ([~x := ~s] t₁) * ([~x := s] t₂) }>
+      <{ ([x := s] t₁) * ([x := s] t₂) }>
   | .ite0 t₁ t₂ t₃ =>
-      <{ if0 [~x := s] t₁ then [~x := s] t₂ else [~x := s] t₃ }>
+      <{ if0 [x := s] t₁ then [x := s] t₂ else [x := s] t₃ }>
 
 
 open Lean PrettyPrinter in
@@ -274,44 +273,44 @@ open Lean PrettyPrinter in
 def unexpandSubst : Unexpander := StlcCommon.Delab.unexpandSubst
 
 section
-variable (x y : String) (s t t₁ t₂ t₃ : Tm) (T : Ty) (n : Nat)
+variable (x y : String) (s t t₁ t₂ t₃ : Tm) (τ : Ty) (n : Nat)
 
-@[simp] theorem subst_var_eq : <{ [~x := s] ~(Tm.var x) }> = s := by
+@[simp] theorem subst_var_eq : <{ [x := s] ~(Tm.var x) }> = s := by
   simp [subst]
 
-@[simp] theorem subst_var_ne (h : x ≠ y) : <{ [~x := s] ~(Tm.var y) }> = .var y := by
+@[simp] theorem subst_var_ne (h : x ≠ y) : <{ [x := s] ~(Tm.var y) }> = .var y := by
   simp [subst, h]
 
-@[simp] theorem subst_abs_eq : <{ [~x := s] (λ ~x : T . t) }> = <{ λ ~x : T . t }> := by
+@[simp] theorem subst_abs_eq : <{ [x := s] (λ x : τ . t) }> = <{ λ x : τ . t }> := by
   simp [subst]
 
 @[simp] theorem subst_abs_ne (h : x ≠ y) :
-    <{ [~x := s] (λ ~y : T . t) }> = <{ λ ~y : ~T . [~x := s] t }> := by
+    <{ [x := s] (λ y : τ . t) }> = <{ λ y : τ . [x := s] t }> := by
   simp [subst, h]
 
 @[simp] theorem subst_app :
-    <{ [~x := s] (t₁ t₂) }> = <{ ([~x := s] t₁) ([~x := s] t₂) }> := rfl
+    <{ [x := s] (t₁ t₂) }> = <{ ([x := s] t₁) ([x := s] t₂) }> := rfl
 
-@[simp] theorem subst_const : <{ [~x := ~s] ~(Tm.const n) }> = .const n := rfl
+@[simp] theorem subst_const : <{ [x := s] ~(Tm.const n) }> = .const n := rfl
 
 @[simp] theorem subst_succ :
-    <{ [~x := s] (succ t₁) }> = <{ succ ([~x := s] t₁) }> := rfl
+    <{ [x := s] (succ t₁) }> = <{ succ ([x := s] t₁) }> := rfl
 
 @[simp] theorem subst_pred :
-    <{ [~x := s] (pred t₁) }> = <{ pred ([~x := s] t₁) }> := rfl
+    <{ [x := s] (pred t₁) }> = <{ pred ([x := s] t₁) }> := rfl
 
 @[simp] theorem subst_mult :
-    <{ [~x := s] (t₁ * t₂) }> = <{ ([~x := s] ~t₁) * ([~x := s] t₂) }> := rfl
+    <{ [x := s] (t₁ * t₂) }> = <{ ([x := s] t₁) * ([x := s] t₂) }> := rfl
 
 @[simp] theorem subst_ite0 :
-    <{ [~x := s] (if0 t₁ then t₂ else t₃) }> =
-      <{ if0 [~x := s] t₁ then [~x := s] t₂ else [~x := s] t₃ }> := rfl
+    <{ [x := s] (if0 t₁ then t₂ else t₃) }> =
+      <{ if0 [x := s] t₁ then [x := s] t₂ else [x := s] t₃ }> := rfl
 -- END SOLUTION
 end
 
 inductive Tm.IsValue : Tm → Prop where
 -- SOLUTION
-  | abs (x : String) (T₂ : Ty) (t₁ : Tm) : Tm.IsValue <{ λ ~x : T₂ . t₁ }>
+  | abs (x : String) (τ₂ : Ty) (t₁ : Tm) : Tm.IsValue <{ λ x : τ₂ . t₁ }>
   | const (n : Nat) : Tm.IsValue (.const n)
 -- END SOLUTION
 
@@ -321,8 +320,8 @@ local notation:40 t:41 " ⟶ " t':41 => Step t t'
 
 inductive Step : Tm → Tm → Prop where
 -- SOLUTION
-  | appAbs (x : String) (T : Ty) (t v : Tm) (hv : v.IsValue) :
-      <{ (λ ~x : T . t) v }> ⟶ <{ [~x := v] t }>
+  | appAbs (x : String) (τ : Ty) (t v : Tm) (hv : v.IsValue) :
+      <{ (λ x : τ . t) v }> ⟶ <{ [x := v] t }>
   | app1 (t₁ t₁' t₂ : Tm) (h : t₁ ⟶ t₁') :
       <{ t₁ t₂ }> ⟶ <{ t₁' t₂ }>
   | app2 (v₁ t₂ t₂' : Tm) (hv : v₁.IsValue) (h : t₂ ⟶ t₂') :
@@ -346,7 +345,7 @@ inductive Step : Tm → Tm → Prop where
   | if0Zero (t₂ t₃ : Tm) :
       <{ if0 0 then t₂ else t₃ }> ⟶ t₂
   | if0Nonzero (n : Nat) (t₂ t₃ : Tm) :
-      <{ if0 ~(Tm.const (n + 1)) then ~t₂ else ~t₃ }> ⟶ t₃
+      <{ if0 ~(Tm.const (n + 1)) then t₂ else t₃ }> ⟶ t₃
 -- END SOLUTION
 end
 
@@ -356,20 +355,20 @@ scoped notation:40 t:41 " ⟶* " t':41 => Multi Step t t'
 abbrev Context := PartialMap String Ty
 
 inductive HasType : Context → Tm → Ty → Prop where
-  | var (Γ : Context) (x : String) (T₁ : Ty)
-      (h : Γ[x] = some T₁) :
-      <{ Γ ⊢ ~(Tm.var x) ⦂ T₁ }>
+  | var (Γ : Context) (x : String) (τ₁ : Ty)
+      (h : Γ[x] = some τ₁) :
+      <{ Γ ⊢ ~(Tm.var x) ⦂ τ₁ }>
 
   | abs (Γ : Context) (x : String)
-      (T₁ T₂ : Ty) (t₁ : Tm)
-      (h : <{ ~x ↦ ~T₂ ; Γ ⊢ t₁ ⦂ T₁ }>) :
-      <{ Γ ⊢ λ ~x : T₂ . t₁ ⦂ T₂ → T₁ }>
+      (τ₁ τ₂ : Ty) (t₁ : Tm)
+      (h : <{ x ↦ τ₂ ; Γ ⊢ t₁ ⦂ τ₁ }>) :
+      <{ Γ ⊢ λ x : τ₂ . t₁ ⦂ τ₂ → τ₁ }>
 
-  | app (Γ : Context) (T₁ T₂ : Ty)
+  | app (Γ : Context) (τ₁ τ₂ : Ty)
       (t₁ t₂ : Tm)
-      (h₁ : <{ Γ ⊢ t₁ ⦂ T₂ → T₁ }>)
-      (h₂ : <{ Γ ⊢ t₂ ⦂ T₂ }>) :
-      <{ Γ ⊢ t₁ t₂ ⦂ T₁ }>
+      (h₁ : <{ Γ ⊢ t₁ ⦂ τ₂ → τ₁ }>)
+      (h₂ : <{ Γ ⊢ t₂ ⦂ τ₂ }>) :
+      <{ Γ ⊢ t₁ t₂ ⦂ τ₁ }>
 
   | const (Γ : Context) (n : Nat) :
       <{ Γ ⊢ ~(Tm.const n) ⦂ Nat }>
@@ -387,10 +386,10 @@ inductive HasType : Context → Tm → Ty → Prop where
       (h₂ : <{ Γ ⊢ t₂ ⦂ Nat }>) :
       <{ Γ ⊢ t₁ * t₂ ⦂ Nat }>
 
-  | ite0 (Γ : Context) (t₁ t₂ t₃ : Tm) (T₀ : Ty)
+  | ite0 (Γ : Context) (t₁ t₂ t₃ : Tm) (τ₀ : Ty)
       (h₁ : <{ Γ ⊢ t₁ ⦂ Nat }>)
-      (h₂ : <{ Γ ⊢ t₂ ⦂ T₀ }>)
-      (h₃ : <{ Γ ⊢ t₃ ⦂ T₀ }>) :
-      <{ Γ ⊢ if0 t₁ then t₂ else t₃ ⦂ T₀ }>
+      (h₂ : <{ Γ ⊢ t₂ ⦂ τ₀ }>)
+      (h₃ : <{ Γ ⊢ t₃ ⦂ τ₀ }>) :
+      <{ Γ ⊢ if0 t₁ then t₂ else t₃ ⦂ τ₀ }>
 
 end StlcArith

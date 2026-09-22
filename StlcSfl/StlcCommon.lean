@@ -43,7 +43,7 @@ syntax:max (name := judgeBracket)
 
 namespace Elab
 
-open Lean Elab Term Meta
+open Lean Elab Term Meta Tactic.TryThis
 
 def withSourceInfoOf {kind : Name} (ref : Syntax) (stx : TSyntax kind)
     (canonical := true) : TSyntax kind :=
@@ -152,60 +152,191 @@ def mkBinder
   addBindingInfo id binding (isBinder := true)
   return binding
 
-/-!
-A bare Lean value of the target `Tm` type may be implicitly antiquoted.
-A `String` is never implicitly interpreted as an object-language variable name.
--/
-def resolveVar? (expectedType : Expr)
-    (id : Ident) : TermElabM (Option Expr) := do
+inductive IdentRole where
+  | term
+  | type
+  | name
+  | context
+  deriving Repr, BEq
+
+def IdentRole.desc : IdentRole → String
+  | term => "term"
+  | type => "type"
+  | name => "name"
+  | context => "context"
+
+inductive IndentKind where
+  | object
+  | metavar
+  deriving Repr, BEq
+
+def isGreek (c : Char) : Bool :=
+  let n := c.val.toNat
+  decide (
+    -- Greek and Coptic
+    (0x0370 ≤ n ∧ n ≤ 0x03ff) ∨
+    -- Greek Extended
+    (0x1f00 ≤ n ∧ n ≤ 0x1fff)
+  )
+
+def classifyIdent? (id : Ident) :
+    Option (IndentKind × String) := do
+  let Name.str .anonymous s ← id.getId.eraseMacroScopes
+    | failure
+  -- reject «a.b»
+  if s.isEmpty || s.contains '.' then
+    failure
+  let c := s.front
+  if c.isUpper then
+    return (.object, s)
+  else if c.isLower || isGreek c then
+    return (.metavar, s)
+  else failure
+
+def resolveMetaIdent (lang : Language) (role : IdentRole)
+    (expectedType : Expr) (id : Ident) : TermElabM Expr := do
+
+  let some (.metavar, name) := classifyIdent? id
+    | throwErrorAt id "expected a metalanguage identifier"
+
+  -- Used only by error branches
+  let getCandidates := do
+    let mut result := #[]
+    for decl in (← getLCtx) do
+      unless decl.isImplementationDetail do
+        if ← withNewMCtxDepth <|
+            isDefEq decl.type expectedType then
+          result := result.push decl
+    return result
+
+  -- Give one obvious local-variable replacement
+  let suggestCandidate (decl : LocalDecl) : TermElabM Unit := do
+    let candidate := mkIdentFrom id decl.userName.eraseMacroScopes
+    let term : Term := ⟨candidate.raw⟩
+
+    -- quote the Lean variable if its name is in the form of object language variable name
+    let bare :=
+      match classifyIdent? candidate with
+      | some (.metavar, _) => true
+      | _ => false
+
+    let suggestion ←
+      match role with
+      | .term =>
+          if bare then
+            `(stlcTm| $candidate:ident)
+          else
+            `(stlcTm| ~$term)
+      | .type =>
+          if bare then
+            `(stlcTy| $candidate:ident)
+          else
+            `(stlcTy| ~$term)
+      | .name =>
+          if bare then
+            `(stlcVar| $candidate:ident)
+          else
+            `(stlcVar| ~$term)
+      | .context =>
+          if bare then
+            `(stlcCtx| $candidate:ident)
+          else
+            `(stlcCtx| ~$term)
+
+    addSuggestion id { suggestion }
+
+  -- Main logic starts here
   let some e ← resolveId? id (withInfo := false)
-    | return none
-  -- The following conservative approach would
-  -- fail if the type is an mvar,
-  -- e.g. `¬ ∃ S T, <{ ∅ ⊢ λ x : S . x x ⦂ T }>`
-  --
-  -- let type ← whnf (← inferType e)
-  -- tryPostponeIfMVar type
-  -- if type.isConstOf targetType then
-  --   addTermInfo' id e
-  --   return some e
-  --
-  -- In this example, we know `S` and `T` have to be `Ty` in order to make sense!
-  -- So Let's solve them instead.
-  let type ← inferType e
-  if ← isDefEq type expectedType then
+    | -- we failed to find `id`
+      do
+        let candidates ← getCandidates
+
+        if let some candidate := candidates[0]? then
+          suggestCandidate candidate
+
+        match role with
+        | .name =>
+            let s : Term := ⟨Syntax.mkStrLit name⟩
+            let suggestion ← `(stlcVar| ~$s)
+            addSuggestion id { suggestion }
+        | .term =>
+            let var : Term := mkIdent lang.varCtor
+            let s : Term := ⟨Syntax.mkStrLit name⟩
+            let app ← `($var $s)
+            let suggestion ← `(stlcTm| ~$app)
+            addSuggestion id { suggestion }
+        | .type | .context => pure ()
+
+        throwErrorAt id m!"unknown metalanguage {role.desc} identifier `{name}`"
+
+  -- we found `id`
+  let actualType ← inferType e
+
+  -- add back if we want to only accept local variable but not global constant
+  -- unless e.isFVar do
+  --   let term : Term := ⟨id.raw⟩
+  --   let suggestion : SuggestionText ←
+  --     match role with
+  --     | .term => `(stlcTm| ~$term)
+  --     | .type => `(stlcTy| ~$term)
+  --     | .name => `(stlcVar| ~$term)
+  --     | .context => `(stlcCtx| ~$term)
+
+  --   addSuggestion id { suggestion }
+
+  --   throwErrorAt id m!"\
+  --   `{name}` resolves to a Lean declaration, not a local {role.desc} variable; \
+  --   use `~{name}`"
+
+  -- Actual elaboration
+  if ← commitWhen <| isDefEq actualType expectedType then
     addTermInfo' id e
-    return some e
-  else
-    return none
+    return e
 
-def resolveTmVar?
-    (lang : Language)
-    (id : Ident) : TermElabM (Option Expr) :=
-  resolveVar? (mkConst lang.tmType) id
+  -- Diagnostics only from here on
+  let actualType ← instantiateMVars actualType
+  let expectedType ← instantiateMVars expectedType
 
-def resolveTyVar?
-    (lang : Language)
-    (id : Ident) : TermElabM (Option Expr) :=
-  resolveVar? (mkConst lang.tyType) id
+  let candidates ← getCandidates
 
+  if let some candidate := candidates[0]? then
+    suggestCandidate candidate
 
-def resolveCtxVar?
-    (lang : Language)
-    (id : Ident) : TermElabM (Option Expr) :=
-  resolveVar? lang.ctxType id
+  -- special check for cases like `fun (x : String) => <{ λ x : τ . x }>`:
+  -- the occurrence of `x` is syntactically meta, but Lean variable `x` is a `String` instead of `Tm`
+  if role == .term &&  (← withNewMCtxDepth <| isDefEq actualType (mkConst ``String)) then
+    let var : Term := mkIdent lang.varCtor
+    let x : Term := ⟨id.raw⟩
+    let app ← `($var $x)
+    let suggestion ← `(stlcTm| ~$app)
+    addSuggestion id { suggestion }
 
-/-!
-A bare `x` denotes the literal object-language name `"x"`.
-Only `~x` splices a Lean `String`.
-This policy is shared by lambda binders and substitution targets.
--/
-def elabStlcVarName (x : TSyntax `stlcVar) : TermElabM Expr :=
+  if role == .name then
+    let s : Term := ⟨Syntax.mkStrLit name⟩
+    let suggestion ← `(stlcVar| ~$s)
+    addSuggestion id { suggestion }
+
+  throwErrorAt id m!"\
+  metalanguage {role.desc} identifier `{name}` has type
+    {actualType}
+  but this position expects
+    {expectedType}"
+
+def elabStlcVarName (lang : Language) (x : TSyntax `stlcVar) : TermElabM Expr := do
   match x with
-  | `(stlcVar| $id:ident) =>
-      return mkStrLit (identString id)
   | `(stlcVar| ~$e:term) =>
       elabTermEnsuringType e (mkConst ``String)
+  | `(stlcVar| $id:ident) =>
+      match classifyIdent? id with
+      | some (.object, name) => return mkStrLit name
+      | some (.metavar, _) =>
+          resolveMetaIdent lang .name (mkConst ``String) id
+      | none => throwErrorAt id "\
+invalid bare name
+
+Use an uppercase Latin identifier for an object-language name, \
+a lowercase/Greek identifier for a Lean String variable, or \
+explicit `~...` for a Lean expression."
   | _ => throwUnsupportedSyntax
 
 def elabStlcBinder
@@ -214,14 +345,26 @@ def elabStlcBinder
     (x : TSyntax `stlcVar) :
     TermElabM (Expr × Scope) := do
   match x with
-  -- Static binder: create new Lean fvar in lexical STLC scope
-  | `(stlcVar| $id:ident) => do
-      let binding ← mkBinder lang id
-      return (mkStrLit binding.name, binding :: Γ)
-  -- Dynamic binder name: don't create the fvar as the String value is only known at runtime
-  | `(stlcVar| ~$name:term) => do
-      let name ← elabTermEnsuringType name (mkConst ``String)
+  | `(stlcVar| ~$e:term) => do
+      let name ← elabTermEnsuringType e (mkConst ``String)
       return (name, Γ)
+  | `(stlcVar| $id:ident) =>
+      match classifyIdent? id with
+      | some (.object, name) => do
+          -- Static object binder.
+          let binding ← mkBinder lang id
+          return (mkStrLit name, binding :: Γ)
+      | some (.metavar, _) => do
+          -- Lean String variable: dynamic binder name.
+          let name ← resolveMetaIdent lang .name (mkConst ``String) id
+          return (name, Γ)
+      | none => throwErrorAt id "\
+invalid bare binder name
+
+Use an uppercase Latin identifier for a static object-language binder, \
+a lowercase/Greek identifier for a Lean String variable, or \
+explicit `~...` for an arbitrary Lean name expression."
+
   | _ => throwUnsupportedSyntax
 
 /-!
@@ -253,8 +396,34 @@ def TmElabHandler.orElse
     TmElabHandler :=
   fun recur k => first recur (second recur k)
 
-def unsupportedTy : TyElab :=
-  fun _ => throwUnsupportedSyntax
+def unsupportedTy (lang : Language) : TyElab :=
+  fun T => do
+    match T with
+    | `(stlcTy| $id:ident) =>
+        match classifyIdent? id with
+        | some (.object, name) => do
+            -- All handlers declined this uppercase identifier.
+            -- Before throwing unknown object type error, check whether there
+            -- happens to be a same-named Lean local of the target `Ty` type
+            -- to give a useful diagnostic for `T : Ty`.
+            let e? ← resolveId? id (withInfo := false)
+            if let some e := e? then
+              if e.isFVar then
+                let actualType ← inferType e
+                if ← withNewMCtxDepth <| isDefEq actualType (mkConst lang.tyType) then
+                  let term : Term := ⟨id.raw⟩
+                  let suggestion ← `(stlcTy| ~$term)
+                  addSuggestion id { suggestion }
+                  throwErrorAt id m!"\
+`{name}` starts with an uppercase Latin letter, so it denotes an \
+object-language type here, not the Lean variable `{name}`.
+
+This language has no object-language type named `{name}`.
+Use `~{name}`, or rename the Lean variable to a lowercase/Greek name \
+such as `τ`."
+            throwErrorAt id m!"unknown object-language type `{name}`"
+        | _ => throwUnsupportedSyntax
+    | _ => throwUnsupportedSyntax
 
 def unsupportedTm : TmElab :=
   fun _ _ _ => throwUnsupportedSyntax
@@ -281,10 +450,16 @@ def commonTyHandler (lang : Language) : TyElabHandler :=
         let B ← recur B
         return lang.mkArrow A B
     | `(stlcTy| $id:ident) =>
-        if let some e ← resolveTyVar? lang id then
-          return e
-        else
-          k T
+        match classifyIdent? id with
+        | some (.metavar, _) =>
+            resolveMetaIdent lang .type (mkConst lang.tyType) id
+        | some (.object, _) => k T -- handled by downstream
+        | none => throwErrorAt id "\
+invalid bare type identifier
+
+Use an uppercase Latin identifier for object-language type syntax, \
+a lowercase/Greek identifier for a Lean type variable, or \
+explicit `~...` for a Lean expression."
     | _ => k T
 
 /--
@@ -305,35 +480,35 @@ def commonTmHandler
     -- Explicit ~ antiquotation
     | `(stlcTm| ~$e:term) =>
         return ( ← elabTermEnsuringType e (mkConst lang.tmType), free)
+    -- Identifier
+    | `(stlcTm| $id:ident) =>
+        match classifyIdent? id with
+        | some (.metavar, _) => do
+            let e ← resolveMetaIdent lang .term (mkConst lang.tmType) id
+            return (e, free)
+        | some (.object, name) => do
+            -- 1. Lexically bound object variable.
+            if let some binding := lookupBinding Γ name then
+              addBindingInfo id binding
+              return (lang.mkVar name, free)
+            -- 2. Existing free object variable.
+            if let some binding := lookupBinding free name then
+              addBindingInfo id binding
+              return (lang.mkVar name, free)
+            -- 3. First free occurrence.
+            let binding ← mkSyntheticBinding lang id
+            addBindingInfo id binding
+            return (lang.mkVar name, binding :: free)
+        | none => throwErrorAt id "\
+invalid bare term identifier
 
-    -- Variable occurrence
-    | `(stlcTm| $id:ident) => do
-        let name := identString id
-        -- 1. Lexically bound object variable.
-        if let some binding := lookupBinding Γ name then
-          addBindingInfo id binding
-          return (lang.mkVar name, free)
-        -- 2. Implicit Lean `Tm` antiquotation.
-        if let some e ← resolveTmVar? lang id then
-          return (e, free)
-        -- 3. Existing free object variable.
-        if let some binding := lookupBinding free name then
-          addBindingInfo id binding
-          return (lang.mkVar name, free)
-        -- 4. First occurrence of this free object variable.
-        let binding ← mkSyntheticBinding lang id
-        addBindingInfo id binding
-        return (lang.mkVar name, binding :: free )
+Use an uppercase Latin identifier for an object-language variable, \
+a lowercase/Greek identifier for a Lean term variable, or \
+explicit `~...` for a Lean expression."
 
     -- Substitution
     | `(stlcTm| [$x:stlcVar := $s:stlcTm] $t:stlcTm) => do
-        /-
-        Name position:
-          `[x := s] t` means `"x"`
-          `[~x := s] t` `splices x : String`
-          NO automatic `String` antiquotation.
-        -/
-        let x ← elabStlcVarName x
+        let x ← elabStlcVarName lang x
         let (s, free) ← recur Γ free s
         let (t, free) ← recur Γ free t
         return (← lang.mkSubst x s t, free)
@@ -369,11 +544,22 @@ partial def elabCtxCommon
   -- Empty object context.
   | `(stlcCtx| ∅) => do
       return (← lang.mkEmptyCtx, [])
-  | `(stlcCtx| $id:ident) => do
-      if let some Γ ← resolveCtxVar? lang id then
-        return (Γ, [])
-      else
-        throwErrorAt id "expected a Lean identifier of type `{lang.ctxType}`"
+  | `(stlcCtx| $id:ident) =>
+      match classifyIdent? id with
+      | some (.metavar, _) =>
+          return (← resolveMetaIdent lang .context lang.ctxType id, [])
+      | some (.object, name) => do
+          let ΓTerm : Term := ⟨id.raw⟩
+          let suggestion ← `(stlcCtx| ~$ΓTerm)
+          addSuggestion id { suggestion }
+          throwErrorAt id m!"\
+`{name}` starts with an uppercase Latin letter, so it denotes an \
+object-language identifier.
+
+Object-language context variables do not exist.
+Use a lowercase/Greek Lean context variable such as `Γ`, or explicitly \
+antiquote a Lean context expression using `~...`."
+      | none => throwErrorAt id "invalid bare context identifier"
   -- Dynamic Lean context
   | `(stlcCtx| ~$Γ:term) => do
       let Γ ← elabTermEnsuringType Γ lang.ctxType
@@ -382,20 +568,10 @@ partial def elabCtxCommon
   | `(stlcCtx| $x:stlcVar ↦ $T:stlcTy ; $Γ:stlcCtx) => do
       let (Γ, scope) ← elabCtxCommon lang elabTy Γ
       let T ← elabTy T
-      match x with
-      -- Static name: create new Lean fvar
-      | `(stlcVar| $id:ident) => do
-          let binding ← mkBinder lang id
-          return (
-            ← lang.mkExtendCtx Γ (mkStrLit binding.name) T,
-            binding :: scope
-          )
-      -- Dynamic name
-      | `(stlcVar| ~$name:term) => do
-          let name ← elabTermEnsuringType name (mkConst ``String)
-          return (← lang.mkExtendCtx Γ name T, scope)
-      | _ => throwUnsupportedSyntax
+      let (x, scope) ← elabStlcBinder lang scope x
+      return (← lang.mkExtendCtx Γ x T, scope)
   | _ => throwUnsupportedSyntax
+
 end Elab
 
 namespace Delab
@@ -427,44 +603,43 @@ def getTy (stx : Term) : TSyntax `stlcTy :=
     match stx with
     | `(<{ $T:stlcTy }>) => return T
     | `((<{ $T:stlcTy }>)) => return T
-    | `($T:ident) => `(stlcTy| $T:ident)
+    | `($id:ident) =>
+        match classifyIdent? id with
+        | some (.metavar, _) => `(stlcTy| $id:ident)
+        | _ => `(stlcTy| ~$stx)
     | _ => `(stlcTy| ~$stx)
-
 
 def getTm (stx : Term) : TSyntax `stlcTm :=
   withSourceInfoOf (canonical := false) stx <| Unhygienic.run do
     match stx with
     | `(<{ $t:stlcTm }>) => return t
     | `((<{ $t:stlcTm }>)) => return t
-    | `($t:ident) => `(stlcTm| $t:ident)
+    | `($id:ident) =>
+      match classifyIdent? id with
+      | some (.metavar, _) => `(stlcTm| $id:ident)
+      | _ => `(stlcTm| ~$stx)
     | _ => `(stlcTm| ~$stx)
-
-def isPlainName (s : String) : Bool :=
-  !s.isEmpty &&
-  s != "_" &&
-  !s.front.isDigit &&
-  s.all fun c => c.isAlphanum || c == '_'
 
 def getVar (stx : Term) : TSyntax `stlcVar :=
   withSourceInfoOf (canonical := false) stx <| Unhygienic.run do
     match stx with
     | `($s:str) =>
-        if isPlainName s.getString then
-          `(stlcVar| $(mkIdentFrom stx (Name.mkSimple s.getString)):ident)
-        else
-          `(stlcVar| ~$s)
+        let id := mkObjectIdentFrom stx s.getString
+        match classifyIdent? id with
+        | some (.object, _) => `(stlcVar| $id:ident)
+        | _ => `(stlcVar| ~$s)
     | _ => `(stlcVar| ~$stx)
 
 /-- Each language provides its `reserved` identifiers (to not be printed as ordinary variables) -/
 def unexpandVar (reserved : String → Bool) (varCtor : Name) : Unexpander
-  | stx@`($_ $s:str) =>
-      if isPlainName s.getString && !reserved s.getString then
-        do
-          let t := mkObjectIdentFrom stx s.getString
-          let t ← `(stlcTm|$t:ident)
+  | stx@`($_ $s:str) => do
+      let name := s.getString
+      let id := mkObjectIdentFrom stx name
+      match classifyIdent? id, !reserved name with
+      | some (.object, _), true =>
+          let t ← `(stlcTm| $id:ident)
           `(<{ $t:stlcTm }>)
-      else
-        pure <| Unhygienic.run do
+      | _, _ => pure <| Unhygienic.run do
           let var : Term := mkIdentFrom stx varCtor
           return (← `($var $s)).raw
   | _ => throw ()

@@ -44,7 +44,7 @@ def tyHandlers : TyElabHandler :=
   boolTyHandler.orElse (commonTyHandler language)
 
 partial def elabTy : TyElab :=
-  tyHandlers elabTy unsupportedTy
+  tyHandlers elabTy <| unsupportedTy language
 
 def boolTmHandler : TmElabHandler :=
   fun recur k Γ free t => do
@@ -145,18 +145,30 @@ private def Tm.unexpandIte : Unexpander
 end Delab
 
 
+
 /--
-info: <{ λ x : Bool . λ y : Bool . x }> : Tm
+info: <{ λ X : Bool . λ X : Bool . X }> : Tm
 ---
-warning: Variable name `y` is not explicitly referenced.
+warning: Variable name `X` is not explicitly referenced.
 
 Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
-  [apply] _y
+  [apply] _X
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 -/
 #guard_msgs in
-#check <{ λ x : Bool . λ y : Bool . x }>
+#check <{ λ X : Bool . λ X : Bool . X }>
+
+
+/--
+info: Try this:
+  [apply] ~"x"
+---
+error: unknown metalanguage name identifier `x`
+-/
+#guard_msgs in
+#check <{ λ x : Bool . x }>
+
 
 /-- info: <{ Bool → Bool }> : Ty -/
 #guard_msgs in
@@ -166,75 +178,103 @@ Note: This linter can be disabled with `set_option linter.unusedVariables false`
 #guard_msgs in
 #check <{ Bool → Bool → Bool }>
 
-/-- info: <{ x }> : Tm -/
+/-- info: <{ X }> : Tm -/
 #guard_msgs in
-#check (<{ x }> : Tm)
+#check (<{ X }> : Tm)
 
 example (x : Tm) : (<{ x }> : Tm) = x := rfl
 
-example (x : String) : (<{ x }> : Tm) = Tm.var "x" := rfl
-
-/-- info: <{ x y }> : Tm -/
-#guard_msgs in
-#check <{ x y }>
-
-/-- info: <{ x y (x y) }> : Tm -/
-#guard_msgs in
-#check <{ (x y) (x y) }>
-
-/-- info: <{ x (y x) y x y }> : Tm -/
-#guard_msgs in
-#check <{ x (y x) y x y }>
-
-/-- info: <{ λ x : Bool . x }> : Tm -/
-#guard_msgs in
-#check <{ λ x : Bool . x }>
-
-/-- info: <{ (λ x : Bool . x) y }> : Tm -/
-#guard_msgs in
-#check <{ (λ x : Bool . x) y }>
-
-/-- info: <{ if x then x else x }> : Tm -/
-#guard_msgs in
-#check <{ if x then x else x }>
-
-/-- info: <{ if x y then x else x }> : Tm -/
-#guard_msgs in
-#check <{ if x y then x else x }>
-
-/-- info: <{ if x y then x else x }> : Tm -/
-#guard_msgs in
-#check <{ if (x y) then x else x }>
-
-/-- info: <{ if x then if x then y else x else y z }> : Tm -/
-#guard_msgs in
-#check <{ if x then if x then y else x else y z }>
-
-/-- info: <{ (if x then if x then y else x else y) z }> : Tm -/
-#guard_msgs in
-#check <{ (if x then if x then y else x else y) z }>
-
-/-- info: <{ λ z : Bool . z z }> : Tm -/
-#guard_msgs in
-#check <{ λ ~"z" : Bool . z z }>
-
 /--
-info: fun x z => <{ λ z : x . z z }> : Ty → String → Tm
----
-warning: Variable name `z` is not explicitly referenced.
+warning: Variable name `x` is not explicitly referenced.
 
 Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
-  [apply] _z
+  [apply] _x
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 -/
 #guard_msgs in
+example (x : String) : (<{ X }> : Tm) = Tm.var "X" := rfl
+
+example : (<{ X }> : Stlc.Tm) = Tm.var "X" := rfl
+
+example (x : Tm) : (<{ x }> : Tm) = x := rfl
+
+example (X : Tm) : (<{ ~X }> : Tm) = X := rfl
+
+example (x : String) (τ : Ty) :
+    <{ λ x : τ . ~(Tm.var x) }> =
+      Tm.abs x τ (Tm.var x) := rfl
+
+example (τ : Ty) :
+    (<{ λ X : τ . X }>) =
+      Tm.abs "X" τ (Tm.var "X") := rfl
+
+/-- info: <{ X Y }> : Tm -/
+#guard_msgs in
+#check <{ X Y }>
+
+/-- info: <{ X Y (X Y) }> : Tm -/
+#guard_msgs in
+#check <{ (X Y) (X Y) }>
+
+/-- info: <{ X (Y X) Y X Y }> : Tm -/
+#guard_msgs in
+#check <{ X (Y X) Y X Y }>
+
+/-- info: <{ λ X : Bool . X }> : Tm -/
+#guard_msgs in
+#check <{ λ X : Bool . X }>
+
+/-- info: <{ (λ X : Bool . X) Y }> : Tm -/
+#guard_msgs in
+#check <{ (λ X : Bool . X) Y }>
+
+/-- info: <{ if X then X else X }> : Tm -/
+#guard_msgs in
+#check <{ if X then X else X }>
+
+/-- info: <{ if X Y then X else X }> : Tm -/
+#guard_msgs in
+#check <{ if X Y then X else X }>
+
+/-- info: <{ if X Y then X else X }> : Tm -/
+#guard_msgs in
+#check <{ if (X Y) then X else X }>
+
+/-- info: <{ if X then if X then Y else X else Y Z }> : Tm -/
+#guard_msgs in
+#check <{ if X then if X then Y else X else Y Z }>
+
+/-- info: <{ (if X then if X then Y else X else Y) Z }> : Tm -/
+#guard_msgs in
+#check <{ (if X then if X then Y else X else Y) Z }>
+
+/-- info: <{ λ ~"z" : Bool . Z Z }> : Tm -/
+#guard_msgs in
+#check <{ λ ~"z" : Bool . Z Z }>
+
+/--
+info: Try this:
+  [apply] ~(Stlc.Tm.var z)
+---
+error: metalanguage term identifier `z` has type
+    String
+  but this position expects
+    Tm
+---
+info: fun x z => sorry : (x : Ty) → (z : String) → ?m.2 x z
+-/
+#guard_msgs in
 #check fun (x : Ty) (z : String) => <{ λ z : x . z z }>
 
-/-- info: Tm.abs "z" Ty.bool (((Tm.var "zzz").app (Tm.var "zzz")).app (Tm.var "z")) -/
+/-- info: Stlc.Tm.var "z" : Tm -/
+#guard_msgs in
+#check <{~(Tm.var "z")}>
+
+/-- info: Tm.abs "Z" Ty.bool (((Tm.var "ZZ").app (Tm.var "ZZ")).app (Tm.var "Z")) -/
 #guard_msgs in
 set_option pp.notation false in
-#reduce let p := Tm.var "zzz"; <{ λ z : Bool . p p z }>
+#reduce let p := Tm.var "ZZ"; <{ λ Z : Bool . p p Z }>
 
 example : (<{ Bool → Bool → Bool }> : Ty) =
     Ty.arrow Ty.bool (Ty.arrow Ty.bool Ty.bool) := rfl
@@ -242,33 +282,60 @@ example : (<{ Bool → Bool → Bool }> : Ty) =
 example : (<{ (Bool → Bool) → Bool }> : Ty) =
     Ty.arrow (Ty.arrow Ty.bool Ty.bool) Ty.bool := rfl
 
-example : (<{ x y z }> : Tm) =
-    Tm.app (Tm.app (Tm.var "x") (Tm.var "y")) (Tm.var "z") := rfl
+example : (<{ X Y Z }> : Tm) =
+    Tm.app (Tm.app (Tm.var "X") (Tm.var "Y")) (Tm.var "Z") := rfl
 
-example : (<{ (if x then y else z) x }> : Tm) =
-    Tm.app (Tm.ite (Tm.var "x") (Tm.var "y") (Tm.var "z")) (Tm.var "x") := rfl
+example : (<{ (if X then Y else Z) X }> : Tm) =
+    Tm.app (Tm.ite (Tm.var "X") (Tm.var "Y") (Tm.var "Z")) (Tm.var "X") := rfl
 
 example : (<{ true }> : Tm) = Tm.tru := rfl
 
 example : (<{ false }> : Tm) = Tm.fls := rfl
 
-example : (<{ if x then y else z }> : Tm) =
-    Tm.ite (Tm.var "x") (Tm.var "y") (Tm.var "z") := rfl
+example : (<{ if X then Y else Z }> : Tm) =
+    Tm.ite (Tm.var "X") (Tm.var "Y") (Tm.var "Z") := rfl
 
 example (t : Tm) : (<{ t }> : Tm) = t := rfl
 
-example (T : Ty) : (<{ T }> : Ty) = T := rfl
+example (τ : Ty) : (<{ τ }> : Ty) = τ := rfl
 
-example (binder : String) : (<{ λ binder : Bool . binder }> : Tm) =
-    Tm.abs "binder" Ty.bool (Tm.var "binder") := rfl
+example (binder : String) : (<{ λ binder : Bool . ~(Tm.var "binder") }> : Tm) =
+    Tm.abs binder Ty.bool (Tm.var "binder") := rfl
 
-example (binder : String) (term : Tm) : (<{ λ binder : Bool . true }> : Tm) =
-    Tm.abs "binder" Ty.bool Tm.tru := rfl
+/--
+warning: Variable name `X` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _X
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: Variable name `term` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _term
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: Variable name `X` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _X
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+-/
+#guard_msgs in
+example (X : String) (term : Tm) : (<{ λ X : Bool . true }> : Tm) =
+    Tm.abs "X" .bool Tm.tru := rfl
 
 example (t u : Tm) : (<{ ~(Tm.app t u) }> : Tm) = Tm.app t u := rfl
 
 /--
-expected a Lean identifier of type `PartialMap String Ty`
+error: overloaded, errors ⏎
+  350:11 `Bool` starts with an uppercase Latin letter, so it denotes an object-language identifier.
+  ⏎
+  Object-language context variables do not exist.
+  Use a lowercase/Greek Lean context variable such as `Γ`, or explicitly antiquote a Lean context expression using `~...`.
   ⏎
   `Bool` is not a valid term.
   ⏎
@@ -279,7 +346,7 @@ expected a Lean identifier of type `PartialMap String Ty`
   but is expected to have type
     Tm
 -/
-#guard_msgs (substring := true) in
+#guard_msgs in
 #check (<{ Bool }> : Tm)
 
 /-- info: (Ty.bool.arrow Ty.bool).arrow Ty.bool : Ty -/
@@ -299,15 +366,19 @@ set_option pp.notation false in
 #guard_msgs in
 #check Tm.var "Bool"
 
-/-- info: <{ x }> : Tm -/
+/-- info: Stlc.Tm.var "x" : Tm -/
 #guard_msgs in
 #check Tm.var "x"
 
-/-- info: <{ «if» }> : Tm -/
+/-- info: <{ X }> : Tm -/
+#guard_msgs in
+#check Tm.var "X"
+
+/-- info: Stlc.Tm.var "if" : Tm -/
 #guard_msgs in
 #check Tm.var "if"
 
-/-- info: <{ succ }> : Tm -/
+/-- info: Stlc.Tm.var "succ" : Tm -/
 #guard_msgs in
 #check Tm.var "succ"
 
@@ -323,9 +394,9 @@ set_option pp.notation false in
 #guard_msgs in
 #check Tm.var "_"
 
-/-- info: <{ x y z (λ x : Bool . x y (λ x : Bool . x)) }> : Tm -/
+/-- info: <{ X Y Z (λ X : Bool . X Y (λ X : Bool . X)) }> : Tm -/
 #guard_msgs in
-#check (<{ x y z (λ x : Bool . x y (λ x : Bool . x))}>)
+#check (<{ X Y Z (λ X : Bool . X Y (λ X : Bool . X))}>)
 
 /--
 error: Ambiguous term
@@ -343,26 +414,33 @@ info: fun x => sorry : (x : Ty) → ?m.3 x
 #check fun x => <{ x }>
 
 /--
-info: fun x => <{ x }> : String → Tm
+error: overloaded, errors ⏎
+  436:30 metalanguage context identifier `x` has type
+      String
+    but this position expects
+      PartialMap String Ty
+  ⏎
+  436:30 metalanguage term identifier `x` has type
+      String
+    but this position expects
+      Tm
+  ⏎
+  436:30 metalanguage type identifier `x` has type
+      String
+    but this position expects
+      Ty
 ---
-warning: Variable name `x` is not explicitly referenced.
-
-Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
-  [apply] _x
-
-Note: This linter can be disabled with `set_option linter.unusedVariables false`
+info: fun x => sorry : (x : String) → ?m.2 x
 -/
 #guard_msgs in
 #check fun (x : String) => <{ x }>
--- object Tm.var "x"
 
 /-- info: fun x => x : Tm → Tm -/
 #guard_msgs in
 #check fun (x : Tm) => <{ x }>
--- Lean antiquotation
 
 inductive Tm.IsValue : Tm → Prop where
-  | abs (x : String) (T₂ : Ty) (t₁ : Tm) : IsValue <{ λ ~x : T₂. t₁ }>
+  | abs (x : String) (τ₂ : Ty) (t₁ : Tm) : IsValue <{ λ x : τ₂ . t₁ }>
   | tru : IsValue <{ true }>
   | fls : IsValue <{ false }>
 
@@ -370,14 +448,14 @@ def subst (x : String) (s : Tm) (t : Tm) : Tm :=
   match t with
   | .var y =>
       if x = y then s else t
-  | .abs y T t₁ =>
-      if x = y then t else <{ λ ~y : T . [~x := s] t₁ }>
+  | .abs y τ t₁ =>
+      if x = y then t else <{ λ y : τ . [x := s] t₁ }>
   | .app t₁ t₂ =>
-      <{ ([~x := s] t₁) ([~x := s] t₂) }>
+      <{ ([x := s] t₁) ([x := s] t₂) }>
   | .tru => .tru
   | .fls => .fls
   | .ite t₁ t₂ t₃ =>
-      <{ if [~x := s] t₁ then [~x := s] t₂ else [~x := s] t₃ }>
+      <{ if [x := s] t₁ then [x := s] t₂ else [x := s] t₃ }>
 
 open Lean PrettyPrinter in
 @[app_unexpander subst]
@@ -385,96 +463,104 @@ def unexpandSubst : Unexpander := StlcCommon.Delab.unexpandSubst
 
 section
 
-variable (x y : String) (s t t₁ t₂ t₃ : Tm) (T : Ty)
+variable (x y : String) (s t t₁ t₂ t₃ : Tm) (τ : Ty)
 
-@[simp] theorem subst_var_eq : <{ [~x := s] ~(Tm.var x) }> = s := by
+@[simp] theorem subst_var_eq : <{ [x := s] ~(Tm.var x) }> = s := by
   simp [subst]
 
-@[simp] theorem subst_var_ne (h : x ≠ y) : <{ [~x := s] ~(Tm.var y) }> = .var y := by
+@[simp] theorem subst_var_ne (h : x ≠ y) : <{ [x := s] ~(Tm.var y) }> = .var y := by
   simp [subst, h]
 
-@[simp] theorem subst_abs_eq : <{ [~x := s] (λ ~x : T . t) }> = <{ λ ~x : T . t }> := by
+@[simp] theorem subst_abs_eq : <{ [x := s] (λ x : τ . t) }> = <{ λ x : τ . t }> := by
   simp [subst]
 
 @[simp] theorem subst_abs_ne (h : x ≠ y) :
-    <{ [~x := s] (λ ~y : T . t) }> = <{ λ ~y : T . [~x := s] t }> := by
+    <{ [x := s] (λ y : τ . t) }> = <{ λ y : τ . [x := s] t }> := by
   simp [subst, h]
 
 @[simp] theorem subst_app :
-    <{ [~x := s] (t₁ t₂) }> = <{ ([~x := s] t₁) ([~x := s] t₂) }> := rfl
+    <{ [x := s] (t₁ t₂) }> = <{ ([x := s] t₁) ([x := s] t₂) }> := rfl
 
-@[simp] theorem subst_tru : <{ [~x := s] true }> = <{ true }> := rfl
+@[simp] theorem subst_tru : <{ [x := s] true }> = <{ true }> := rfl
 
-@[simp] theorem subst_fls : <{ [~x := s] false }> = <{ false }> := rfl
+@[simp] theorem subst_fls : <{ [x := s] false }> = <{ false }> := rfl
 
 @[simp] theorem subst_ite :
-    <{ [~x := s] (if t₁ then t₂ else t₃) }> =
-      <{ if [~x := s] t₁ then [~x := s] t₂ else [~x := s] t₃ }> := rfl
+    <{ [x := s] (if t₁ then t₂ else t₃) }> =
+      <{ if [x := s] t₁ then [x := s] t₂ else [x := s] t₃ }> := rfl
 
 end
 
-/-- info: <{ [x := x] x }> : Tm -/
+/-- info: <{ [X := X] X }> : Tm -/
 #guard_msgs in
-#check <{ [x := x] x }>
+#check <{ [X := X] X }>
 
-/-- info: <{ [x := x] [x := y] z }> : Tm -/
+/-- info: <{ [X := X] [X := Y] Z }> : Tm -/
 #guard_msgs in
-#check <{ [x := x] [x := y] z }>
+#check <{ [X := X] [X := Y] Z }>
 
 /--
-info: <{ [x := x] (λ y : Bool . x) }> : Tm
+info: <{ [X := X] (λ Y : Bool . X) }> : Tm
 ---
-warning: Variable name `y` is not explicitly referenced.
+warning: Variable name `Y` is not explicitly referenced.
 
 Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
-  [apply] _y
+  [apply] _Y
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 -/
 #guard_msgs in
-#check <{ [x := x] (λ y : Bool . x) }>
+#check <{ [X := X] (λ Y : Bool . X) }>
 
-/-- info: <{ [x := x] (λ y : Bool . x y) }> : Tm -/
+/-- info: <{ [X := X] (λ Y : Bool . X Y) }> : Tm -/
 #guard_msgs in
-#check <{ [x := x] (λ y : Bool . x y) }>
+#check <{ [X := X] (λ Y : Bool . X Y) }>
 
-/-- info: <{ [x := x] (λ y : Bool . [x := x] x y) }> : Tm -/
+/-- info: <{ [X := X] (λ Y : Bool . [X := X] X Y) }> : Tm -/
 #guard_msgs in
-#check <{ [x := x] (λ y : Bool . ([x := x] x) y) }>
+#check <{ [X := X] (λ Y : Bool . ([X := X] X) Y) }>
 
-/-- info: <{ [x := z] y [x := z] x }> : Tm -/
+/-- info: <{ [X := Z] Y [X := Z] X }> : Tm -/
 #guard_msgs in
-#check <{ ([x := z] y) ([x := z] x) }>
+#check <{ ([X := Z] Y) ([X := Z] X) }>
 
-/-- info: <{ [x := λ y : Bool . y] (x z) }> : Tm -/
+/--
+info: <{ [X := λ Y : Bool . Z] (X Z) }> : Tm
+---
+warning: Variable name `Y` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _Y
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+-/
 #guard_msgs in
-#check <{ [x := (λ y : Bool . y)] (x z) }>
+#check <{ [X := (λ Y : Bool . Z)] (X Z) }>
 
 abbrev Context := PartialMap String Ty
 
 inductive HasType : Context → Tm → Ty → Prop where
-  | var (Γ : Context) (x : String) (T₁ : Ty)
-      (h : Γ[x] = some T₁) :
-      <{ Γ ⊢ ~(Tm.var x) ⦂ T₁ }>
+  | var (Γ : Context) (x : String) (τ₁ : Ty)
+      (h : Γ[x] = some τ₁) :
+      <{ Γ ⊢ ~(Tm.var x) ⦂ τ₁ }>
   | abs (Γ : Context) (x : String)
-      (T₁ T₂ : Ty) (t₁ : Tm)
-      (h : <{ ~x ↦ ~T₂ ; Γ ⊢ t₁ ⦂ T₁ }>) :
-      <{ Γ ⊢ λ ~x : T₂ . t₁ ⦂ T₂ → T₁ }>
-  | app (Γ : Context) (T₁ T₂ : Ty)
+      (τ₁ τ₂ : Ty) (t₁ : Tm)
+      (h : <{ x ↦ τ₂ ; Γ ⊢ t₁ ⦂ τ₁ }>) :
+      <{ Γ ⊢ λ x : τ₂ . t₁ ⦂ τ₂ → τ₁ }>
+  | app (Γ : Context) (τ₁ τ₂ : Ty)
       (t₁ t₂ : Tm)
-      (h₁ : <{ Γ ⊢ t₁ ⦂ T₂ → T₁ }>)
-      (h₂ : <{ Γ ⊢ t₂ ⦂ T₂ }>) :
-      <{ Γ ⊢ t₁ t₂ ⦂ T₁ }>
+      (h₁ : <{ Γ ⊢ t₁ ⦂ τ₂ → τ₁ }>)
+      (h₂ : <{ Γ ⊢ t₂ ⦂ τ₂ }>) :
+      <{ Γ ⊢ t₁ t₂ ⦂ τ₁ }>
   | tru (Γ : Context) :
        <{ Γ ⊢ true ⦂ Bool }>
   | fls (Γ : Context) :
        <{ Γ ⊢ false ⦂ Bool }>
-  | ite (Γ : Context) (t₁ t₂ t₃ : Tm) (T₁ : Ty)
+  | ite (Γ : Context) (t₁ t₂ t₃ : Tm) (τ₁ : Ty)
       (h₁ : <{ Γ ⊢ t₁ ⦂ Bool }>)
-      (h₂ : <{ Γ ⊢ t₂ ⦂ T₁ }>)
-      (h₃ : <{ Γ ⊢ t₃ ⦂ T₁ }>) :
-      <{ Γ ⊢ if t₁ then t₂ else t₃ ⦂ T₁ }>
-
+      (h₂ : <{ Γ ⊢ t₂ ⦂ τ₁ }>)
+      (h₃ : <{ Γ ⊢ t₃ ⦂ τ₁ }>) :
+      <{ Γ ⊢ if t₁ then t₂ else t₃ ⦂ τ₁ }>
 
 open Lean PrettyPrinter in
 @[app_unexpander HasType]
@@ -486,16 +572,25 @@ section
 #guard_msgs in
 #check <{ ∅ ⊢ true ⦂ Bool }>
 
-/-- info: <{ x ↦ Bool ; ∅ ⊢ x ⦂ Bool }> : Prop -/
+/-- info: <{ X ↦ Bool ; ∅ ⊢ X ⦂ Bool }> : Prop -/
 #guard_msgs in
 #check HasType
-  (PartialMap.update (∅ : Context) "x" Ty.bool)
-  (Tm.var "x")
+  (PartialMap.update (∅ : Context) "X" Ty.bool)
+  (Tm.var "X")
   Ty.bool
 
-/-- info: fun Γ t T => <{ Γ ⊢ t ⦂ T }> : Context → Tm → Ty → Prop -/
+/--
+info: fun Γ t τ => <{ Z ↦ Bool ; Γ ⊢ t ⦂ τ }> : Context → Tm → Ty → Prop
+---
+warning: Variable name `Z` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _Z
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+-/
 #guard_msgs in
-#check fun (Γ : Context) (t : Tm) (T : Ty) => <{ Γ ⊢ t ⦂ T }>
+#check fun (Γ : Context) (t : Tm) (τ : Ty) => <{ Z ↦ Bool ; Γ ⊢ t ⦂ τ }>
 
 end
 

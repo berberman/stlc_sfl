@@ -62,20 +62,23 @@ def subTyHandler : TyElabHandler :=
 /--
 Make unresolved type identifiers "base types".
 This must run after `commonTyHandler`
-so a Lean variable `T : Ty` is implicitly antiquoted first.
+so a Lean variable `τ : Ty` is implicitly antiquoted first.
 -/
 
 def baseTyHandler : TyElabHandler :=
   fun _recur k T => do
     match T with
     | `(stlcTy| $id:ident) => do
-        return mkApp (mkConst ``Ty.base) (mkStrLit (identString id))
+        match classifyIdent? id with
+        | some (.object, name) =>
+          return mkApp (mkConst ``Ty.base) (mkStrLit name)
+        | _ => k T
     | _ => k T
 
 def tyHandlers : TyElabHandler :=
   subTyHandler.orElse ((commonTyHandler language).orElse baseTyHandler)
 
-partial def elabTy : TyElab := tyHandlers elabTy unsupportedTy
+partial def elabTy : TyElab := tyHandlers elabTy  <| unsupportedTy language
 
 def subTmHandler : TmElabHandler :=
   fun recur k Γ free t => do
@@ -185,12 +188,13 @@ private def reservedTyNames : String → Bool
 @[app_unexpander Ty.base]
 private def Ty.unexpandBase : Unexpander
   | stx@`($_ $s:str) => do
-      unless isPlainName s.getString
-          && !reservedTyNames s.getString do
-        throw ()
-      let id := mkObjectIdentFrom stx s.getString
-      let T ← `(stlcTy| $id:ident)
-      `(<{ $T:stlcTy }>)
+      let name := s.getString
+      let id := mkObjectIdentFrom stx name
+      match classifyIdent? id, reservedTyNames name with
+      | some (.object, _), false =>
+          let T ← `(stlcTy| $id:ident)
+          `(<{ $T:stlcTy }>)
+      | _, _ => throw ()
   | _ => throw ()
 
 private def reservedTmNames : String → Bool
@@ -271,50 +275,46 @@ private def Tm.unexpandSnd : Unexpander
 
 end Delab
 
-/-- info: <{ λ x : Nat . x }> : Tm -/
+/-- info: <{ λ X : Nat . X }> : Tm -/
 #guard_msgs in
-#check <{ λx : Nat. x }>
+#check <{ λ X : Nat. X }>
 
-/-- info: <{ if x then x else x }> : Tm -/
+/-- info: <{ if X then X else X }> : Tm -/
 #guard_msgs in
-#check <{ if x then x else x }>
+#check <{ if X then X else X }>
 
-/-- info: <{ if y x then x else x }> : Tm -/
+/-- info: <{ if Y X then X else X }> : Tm -/
 #guard_msgs in
-#check <{ if y x then x else x }>
+#check <{ if Y X then X else X }>
 
-/-- info: <{ if y x then x else x }> : Tm -/
+/-- info: <{ if Y X then X else X }> : Tm -/
 #guard_msgs in
-#check <{ if (y x) then x else x }>
+#check <{ if (Y X) then X else X }>
 
-/-- info: <{ ( x , y ) }> : Tm -/
+/-- info: <{ ( X , Y ) }> : Tm -/
 #guard_msgs in
-#check <{ (x , y) }>
+#check <{ (X , Y) }>
 
-/-- info: <{ fst x }> : Tm -/
+/-- info: <{ fst X }> : Tm -/
 #guard_msgs in
-#check <{ fst x }>
+#check <{ fst X }>
 
-/-- info: <{ fst  ( x , y ) }> : Tm -/
+/-- info: <{ fst  ( X , Y ) }> : Tm -/
 #guard_msgs in
-#check <{ fst (x , y) }>
-
-/-- info: <{ x (succ y) }> : Tm -/
-#guard_msgs in
-#check <{ x (succ y) }>
+#check <{ fst (X , Y) }>
 
 /--
-info: <{ λ x : Bool . λ y : ⊤ . if x then true else false }> : Tm
+info: <{ λ X : Bool . λ Y : ⊤ . if X then true else false }> : Tm
 ---
-warning: Variable name `y` is not explicitly referenced.
+warning: Variable name `Y` is not explicitly referenced.
 
 Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
-  [apply] _y
+  [apply] _Y
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 -/
 #guard_msgs in
-#check <{ λ x : Bool . λ y : ⊤ . if x then true else false }>
+#check <{ λ X : Bool . λ Y : ⊤ . if X then true else false }>
 
 /-- info: <{ Unit }> : Ty -/
 #guard_msgs in
@@ -346,32 +346,32 @@ def subst (x : String) (s : Tm) (t : Tm) : Tm :=
   | .var y =>
       if x = y then s else t
   | .abs y τ t₁ =>
-      if x = y then t else <{ λ ~y : τ . [~x := s] t₁ }>
+      if x = y then t else <{ λ y : τ . [x := s] t₁ }>
   | .app t₁ t₂ =>
-      <{ ([~x := s] t₁) ([~x := s] t₂) }>
+      <{ ([x := s] t₁) ([x := s] t₂) }>
   -- unit
   | .unit => <{ unit }>
   -- bools
   | .tru => <{ true }>
   | .fls => <{ false }>
   | .ite t₁ t₂ t₃ =>
-      <{ if [~x := s] t₁ then [~x := s] t₂ else [~x := s] ~t₃ }>
+      <{ if [x := s] t₁ then [x := s] t₂ else [x := s] t₃ }>
 
   -- Complete the following cases when you do the `products` exercise later
   | .pair t₁ t₂ =>
-      (<{ ([~x := s] t₁ , [~x := s] t₂) }>) -- solution
+      (<{ ([x := s] t₁ , [x := s] t₂) }>) -- solution
   | .fst t =>
-      (<{ fst ([~x := s] t)}>) -- solution
+      (<{ fst ([x := s] t)}>) -- solution
   | .snd t =>
-      (<{ snd ([~x := s] t)}>) -- solution
+      (<{ snd ([x := s] t)}>) -- solution
 
 open Lean PrettyPrinter in
 @[app_unexpander subst]
 def unexpandSubst : Unexpander := StlcCommon.Delab.unexpandSubst
 
 inductive Tm.IsValue : Tm → Prop where
-  | abs : ∀ x τ₂ t₁,
-      IsValue <{λ ~x : τ₂ . t₁}>
+  | abs (x : String) (τ₂ : Ty) (t₁ : Tm) :
+      IsValue <{λ x : τ₂ . t₁}>
   | tru :
       IsValue <{true}>
   | fls :
@@ -381,7 +381,7 @@ inductive Tm.IsValue : Tm → Prop where
 
 -- Fill in more rules when you do the `products` exercise later
 -- SOLUTION
-  | pair : ∀ v₁ v₂,
+  | pair (v₁ v₂ : Tm) :
       IsValue v₁ →
       IsValue v₂ →
       IsValue <{(v₁, v₂)}>
@@ -397,7 +397,7 @@ inductive Step : Tm → Tm → Prop where
   -- pure STLC
   | appAbs (x : String) (τ₂ : Ty) (t₁ v₂ : Tm) :
       v₂.IsValue →
-       <{(λ ~x: τ₂ . t₁) v₂}> ⟶ <{ [~x := v₂] t₁ }>
+       <{(λ x : τ₂ . t₁) v₂}> ⟶ <{ [x := v₂] t₁ }>
   | app₁ (t₁ t₁' t₂ : Tm) :
       t₁ ⟶ t₁' →
       <{t₁ t₂}> ⟶ <{t₁' t₂}>
@@ -465,7 +465,7 @@ inductive Subtype : Ty → Ty → Prop where
   | prod { σ₁ σ₂ τ₁ τ₂ : Ty}
       (h₁ : σ₁ <: τ₁)
       (h₂ : σ₂ <: τ₂) :
-      <{ ~σ₁ × ~σ₂ }> <: <{ ~τ₁ × ~τ₂ }>
+      <{ σ₁ × σ₂ }> <: <{ τ₁ × τ₂ }>
 -- END SOLUTION
 end
 
@@ -478,8 +478,8 @@ inductive HasType : Context → Tm → Ty → Prop where
   | var (Γ : Context) (x : String) (τ₁ : Ty) (h : Γ[x] = some τ₁) :
       <{ Γ ⊢ ~(Tm.var x) ⦂ τ₁ }>
   | abs (Γ : Context) (x : String) (τ₁ τ₂ : Ty) (t₁ : Tm)
-      (h : <{ ~x ↦ τ₂ ; Γ ⊢ t₁ ⦂ τ₁ }>) :
-      <{ Γ ⊢ λ ~x : τ₂ . t₁ ⦂ τ₂ → τ₁ }>
+      (h : <{ x ↦ τ₂ ; Γ ⊢ t₁ ⦂ τ₁ }>) :
+      <{ Γ ⊢ λ x : τ₂ . t₁ ⦂ τ₂ → τ₁ }>
   | app (Γ : Context) (τ₁ τ₂ : Ty) (t₁ t₂ : Tm)
       (h₁ : <{ Γ ⊢ t₁ ⦂ τ₂ → τ₁ }>) (h₂ : <{ Γ ⊢ t₂ ⦂ τ₂ }>) :
       <{ Γ ⊢ t₁ t₂ ⦂ τ₁ }>
@@ -519,7 +519,7 @@ open Lean PrettyPrinter in
 @[app_unexpander HasType]
 def HasType.unexpand : Unexpander := StlcCommon.Delab.unexpandHasType
 
-example : <{ ∅ ⊢ (λ x : (⊤ × (B → B)) . snd x) ((λ z : A . z), (λ z : B . z)) ⦂ (B → B) }> := by
+example : <{ ∅ ⊢ (λ X : (⊤ × (B → B)) . snd X) ((λ Z : A . Z), (λ Z : B . Z)) ⦂ (B → B) }> := by
   apply HasType.app
   · apply HasType.abs
     apply HasType.snd

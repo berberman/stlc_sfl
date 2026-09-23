@@ -81,27 +81,14 @@ def tmHandlers : TmElabHandler :=
 partial def elabTm : TmElab :=
   tmHandlers elabTm unsupportedTm
 
-scoped elab_rules (kind := StlcCommon.tyBracket) : term
-  | `(<{ $T:stlcTy }>) => elabTy T
-
-scoped elab_rules (kind := StlcCommon.tmBracket) : term
-  | `(<{ $t:stlcTm }>) => do
-      let (t, _) ← elabTm [] [] t
-      return t
-
 def elabCtx : CtxElab := elabCtxCommon language elabTy
 
-scoped elab_rules (kind := StlcCommon.ctxBracket) : term
-  | `(<{ $Γ:stlcCtx }>) => do
-      let (Γ, _) ← elabCtx Γ
-      return Γ
-
-scoped elab_rules (kind := StlcCommon.judgeBracket) : term
-  | `(<{ $Γ:stlcCtx ⊢ $t:stlcTm ⦂ $T:stlcTy }>) => do
-      let (Γ, scope) ← elabCtx Γ
-      let (t, _) ← elabTm scope [] t
-      let T ← elabTy T
-      language.mkHasType Γ t T
+@[scoped term_elab StlcCommon.bracket]
+def elabBracket : TermElab :=
+  fun stx expectedType? => do
+    let `(<{ $q:stlcQuoted }>) := stx
+      | throwUnsupportedSyntax
+    elabQuoted language elabTy elabTm elabCtx q expectedType?
 
 end Elab
 
@@ -165,7 +152,10 @@ def Tm.unexpandPred : Unexpander
 
 @[app_unexpander Tm.mult]
 def Tm.unexpandMult : Unexpander
-  | `($_ $t₁ $t₂) => `(<{ $(getTm t₁) * $(getTm t₂) }>)
+  | `($_ $t₁ $t₂) => do
+    let t ← `(stlcTm| $(getTm t₁) * $(getTm t₂))
+    let q ← `(stlcQuoted| $t:stlcTm)
+    `(<{ $q:stlcQuoted }>)
   | _ => throw ()
 
 end Delab

@@ -68,27 +68,14 @@ def tmHandlers : TmElabHandler :=
 partial def elabTm : TmElab :=
   tmHandlers elabTm unsupportedTm
 
-scoped elab_rules (kind := StlcCommon.tyBracket) : term
-  | `(<{ $T:stlcTy }>) => elabTy T
-
-scoped elab_rules (kind := StlcCommon.tmBracket) : term
-  | `(<{ $t:stlcTm }>) => do
-      let (t, _) ← elabTm [] [] t
-      return t
-
 def elabCtx : CtxElab := elabCtxCommon language elabTy
 
-scoped elab_rules (kind := StlcCommon.ctxBracket) : term
-  | `(<{ $Γ:stlcCtx }>) => do
-      let (Γ, _) ← elabCtx Γ
-      return Γ
-
-scoped elab_rules (kind := StlcCommon.judgeBracket) : term
-  | `(<{ $Γ:stlcCtx ⊢ $t:stlcTm ⦂ $T:stlcTy }>) => do
-      let (Γ, scope) ← elabCtx Γ
-      let (t, _) ← elabTm scope [] t
-      let T ← elabTy T
-      language.mkHasType Γ t T
+@[scoped term_elab StlcCommon.bracket]
+def elabBracket : TermElab :=
+  fun stx expectedType? => do
+    let `(<{ $q:stlcQuoted }>) := stx
+      | throwUnsupportedSyntax
+    elabQuoted language elabTy elabTm elabCtx q expectedType?
 
 end Elab
 
@@ -330,22 +317,7 @@ example (X : String) (term : Tm) : (<{ λ X : Bool . true }> : Tm) =
 
 example (t u : Tm) : (<{ ~(Tm.app t u) }> : Tm) = Tm.app t u := rfl
 
-/--
-error: overloaded, errors ⏎
-  350:11 `Bool` starts with an uppercase Latin letter, so it denotes an object-language identifier.
-  ⏎
-  Object-language context variables do not exist.
-  Use a lowercase/Greek Lean context variable such as `Γ`, or explicitly antiquote a Lean context expression using `~...`.
-  ⏎
-  `Bool` is not a valid term.
-  ⏎
-  Type mismatch
-    <{ Bool }>
-  has type
-    Ty
-  but is expected to have type
-    Tm
--/
+/-- error: `Bool` is not a valid term. -/
 #guard_msgs in
 #check (<{ Bool }> : Tm)
 
@@ -399,36 +371,24 @@ set_option pp.notation false in
 #check (<{ X Y Z (λ X : Bool . X Y (λ X : Bool . X))}>)
 
 /--
-error: Ambiguous term
-  <{ x }>
-Possible interpretations:
-  x : PartialMap String Ty
-  ⏎
-  x : Tm
-  ⏎
-  x : Ty
+error: ambiguous STLC quotation
+
+This syntax has multiple valid interpretations:
+  context, term, type
+
+Add a Lean type annotation to select the intended interpretation.
 ---
-info: fun x => sorry : (x : Ty) → ?m.3 x
+info: fun x => sorry : (x : ?m.1) → ?m.3 x
 -/
 #guard_msgs in
 #check fun x => <{ x }>
 
 /--
-error: overloaded, errors ⏎
-  436:30 metalanguage context identifier `x` has type
-      String
-    but this position expects
-      PartialMap String Ty
-  ⏎
-  436:30 metalanguage term identifier `x` has type
-      String
-    but this position expects
-      Tm
-  ⏎
-  436:30 metalanguage type identifier `x` has type
-      String
-    but this position expects
-      Ty
+error: this STLC quotation has no valid interpretation
+
+Tried: context, term, type
+
+Add a Lean type annotation to select an interpretation and obtain a more specific error.
 ---
 info: fun x => sorry : (x : String) → ?m.2 x
 -/

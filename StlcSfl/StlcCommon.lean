@@ -3,6 +3,8 @@ import StlcSfl.BookDeps
 
 namespace StlcCommon
 
+declare_syntax_cat stlcQuoted
+
 declare_syntax_cat stlcTy
 
 syntax:max "~" term:max : stlcTy
@@ -11,7 +13,7 @@ syntax:max ident : stlcTy
 syntax:50 stlcTy:51 " → " stlcTy:50 : stlcTy
 syntax:50 stlcTy:51 " -> " stlcTy:50 : stlcTy
 
-syntax:max (name := tyBracket) "<{ " stlcTy " }>" : term
+syntax (name := quotedTy) stlcTy : stlcQuoted
 
 declare_syntax_cat stlcVar
 
@@ -27,7 +29,7 @@ syntax:75 stlcTm:75 ppSpace stlcTm:76 : stlcTm
 syntax:50 "λ " stlcVar " : " stlcTy " . " stlcTm:50 : stlcTm
 syntax:max "[" stlcVar " := " stlcTm "] " stlcTm:max : stlcTm
 
-syntax:max (name := tmBracket) "<{ " stlcTm " }>" : term
+syntax (name := quotedTm) stlcTm : stlcQuoted
 
 declare_syntax_cat stlcCtx
 
@@ -36,10 +38,11 @@ syntax:max "~" term:max : stlcCtx
 syntax:max ident : stlcCtx
 syntax:max stlcVar " ↦ " stlcTy " ; " stlcCtx : stlcCtx
 
-syntax:max (name := ctxBracket) "<{ " stlcCtx " }>" : term
+syntax (name := quotedCtx) stlcCtx : stlcQuoted
 
-syntax:max (name := judgeBracket)
-  "<{ " stlcCtx " ⊢ " stlcTm " ⦂ " stlcTy " }>" : term
+syntax (name := quotedJudge) stlcCtx " ⊢ " stlcTm " ⦂ " stlcTy : stlcQuoted
+
+syntax:max (name := bracket) "<{ " stlcQuoted " }>" : term
 
 namespace Elab
 
@@ -572,6 +575,126 @@ antiquote a Lean context expression using `~...`."
       return (← lang.mkExtendCtx Γ x T, scope)
   | _ => throwUnsupportedSyntax
 
+
+def elabQuoted
+    (lang : Language)
+    (elabTy : TyElab)
+    (elabTm : TmElab)
+    (elabCtx : CtxElab)
+    (q : TSyntax `stlcQuoted)
+    (expectedType? : Option Expr) :
+    TermElabM Expr := do
+
+  let elabOne (q : TSyntax `stlcQuoted) : TermElabM Expr := do
+    match q with
+    | `(stlcQuoted| $T:stlcTy) => elabTy T
+    | `(stlcQuoted| $t:stlcTm) => do
+        return (← elabTm [] [] t).1
+    | `(stlcQuoted| $Γ:stlcCtx) => do
+        return (← elabCtx Γ).1
+    | `(stlcQuoted| $Γ:stlcCtx ⊢ $t:stlcTm ⦂ $T:stlcTy) => do
+        let (Γ, scope) ← elabCtx Γ
+        let (t, _) ← elabTm scope [] t
+        let T ← elabTy T
+        lang.mkHasType Γ t T
+    | _ => throwUnsupportedSyntax
+
+  let resultType? (q : Syntax) : Option Expr :=
+    if q.isOfKind ``StlcCommon.quotedTy then
+      some (mkConst lang.tyType)
+    else if q.isOfKind ``StlcCommon.quotedTm then
+      some (mkConst lang.tmType)
+    else if q.isOfKind ``StlcCommon.quotedCtx then
+      some lang.ctxType
+    else if q.isOfKind ``StlcCommon.quotedJudge then
+      some (mkSort .zero)
+    else
+      none
+
+  let kindName (stx : Syntax) : String :=
+    if stx.isOfKind ``StlcCommon.quotedTy then
+      "type"
+    else if stx.isOfKind ``StlcCommon.quotedTm then
+      "term"
+    else if stx.isOfKind ``StlcCommon.quotedCtx then
+      "context"
+    else if stx.isOfKind ``StlcCommon.quotedJudge then
+      "typing judgment"
+    else
+      "unknown"
+
+  let alternatives :=
+    if q.raw.isOfKind choiceKind then
+      q.raw.getArgs
+    else
+      #[q.raw]
+
+  let candidates ←
+    match expectedType? with
+    | none => pure alternatives
+    | some expectedType => do
+      let expectedType ← instantiateMVars expectedType
+      if expectedType.hasExprMVar then
+        pure alternatives
+      else
+        let mut res := #[]
+        for alt in alternatives do
+          if let some resultType := resultType? alt then
+            if ← isDefEq expectedType resultType then
+              res := res.push alt
+        if res.isEmpty then
+          throwErrorAt q m!"this STLC quotation cannot have the expected Lean type {expectedType}"
+        pure res
+
+  let test (alt : Syntax) : TermElabM Bool := do
+    let s ← saveState
+    try
+      let result? ← commitIfNoErrors? <| elabOne ⟨alt⟩
+      return result?.isSome
+    finally
+      s.restore (restoreInfo := true)
+
+  let mut successes := #[]
+
+  for alt in candidates do
+    if ← test alt then
+      successes := successes.push alt
+
+  match successes with
+  | #[alt] =>
+      -- Unique interpretation: re-elab it.
+      elabOne ⟨alt⟩
+
+  | #[] =>
+      -- The expected type selected exactly one category.
+      -- rerun to get its language-specific error.
+      if let #[alt] := candidates then
+        discard <| elabOne ⟨alt⟩
+
+      let kinds := candidates.toList
+        |>.map kindName
+        |> String.intercalate ", "
+
+      throwErrorAt q m!"\
+this STLC quotation has no valid interpretation
+
+Tried: {kinds}
+
+Add a Lean type annotation to select an interpretation and obtain a more specific error."
+
+  | _ =>
+      let kinds := successes.toList
+        |>.map kindName
+        |> String.intercalate ", "
+
+      throwErrorAt q m!"\
+ambiguous STLC quotation
+
+This syntax has multiple valid interpretations:
+  {kinds}
+
+Add a Lean type annotation to select the intended interpretation."
+
 end Elab
 
 namespace Delab
@@ -655,11 +778,17 @@ def delabVar (varCtor : Name) : Delab :=
         `($var $(← withAppArg delab))
 
 def unexpandArrow : Unexpander
-  | `($_ $A $B) => `(<{ $(getTy A) → $(getTy B) }>)
+  | `($_ $A $B) => do
+      let T ← `(stlcTy| $(getTy A) → $(getTy B))
+      let q ← `(stlcQuoted| $T:stlcTy)
+      `(<{ $q:stlcQuoted }>)
   | _ => throw ()
 
 def unexpandApp : Unexpander
-  | `($_ $f $a) => `(<{ $(getTm f) $(getTm a) }>)
+  | `($_ $f $a) => do
+      let t ← `(stlcTm| $(getTm f) $(getTm a))
+      let q ← `(stlcQuoted| $t:stlcTm)
+      `(<{ $q:stlcQuoted }>)
   | _ => throw ()
 
 def unexpandAbs : Unexpander
